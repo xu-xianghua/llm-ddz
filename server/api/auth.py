@@ -1,12 +1,14 @@
 from typing import Optional, Awaitable
 
-from sqlalchemy import select
 from tornado.escape import json_encode
 from tornado.web import authenticated, RequestHandler
 
 from api.base import RestfulHandler, JwtMixin
 from api.game.globalvar import GlobalVar
-from models import User
+
+# 简单的玩家存储
+player_store = {}
+next_player_id = 1
 
 
 class IndexHandler(RequestHandler):
@@ -25,22 +27,25 @@ class LoginHandler(RestfulHandler, JwtMixin):
         self.write({'detail': 'welcome'})
 
     async def post(self):
+        global next_player_id
         name = self.get_json_data()['name']
-        async with self.session as session:
-            async with session.begin():
-                account = await self.get_one_or_none(select(User).where(User.name == name))
-                if not account:
-                    account = User(openid=name, name=name, sex=1, avatar='')
-                    session.add(account)
-                    await session.commit()
+        
+        # 创建简单的玩家信息
+        player = {
+            'uid': next_player_id,
+            'name': name,
+            'sex': 1,  # 默认值
+            'avatar': ''  # 默认空头像
+        }
+        
+        player_store[next_player_id] = player
+        next_player_id += 1
 
-        account = account.to_dict()
-        self.set_secure_cookie('userinfo', json_encode(account))
+        self.set_secure_cookie('userinfo', json_encode(player))
         self.write({
-            **account,
-            'room': GlobalVar.find_player_room_id(account['uid']),
-            'rooms': GlobalVar.room_list(),
-            'token': self.jwt_encode(account)
+            **player,
+            'room': -1,  # 默认未加入房间
+            'token': self.jwt_encode(player)
         })
 
 
@@ -48,18 +53,18 @@ class UserInfoHandler(RestfulHandler):
 
     @authenticated
     async def get(self):
-        account: User = await self.get_one_or_none(select(User).where(User.id == self.current_user['uid']))
-        if account:
-            account = account.to_dict()
-            self.set_secure_cookie('user', json_encode(account))
+        uid = self.current_user['uid']
+        player = player_store.get(uid)
+        
+        if player:
             self.write({
-                **account,
-                'room': GlobalVar.find_player_room_id(account['uid']),
+                **player,
+                'room': GlobalVar.find_player_room_id(player['uid']),
                 'rooms': GlobalVar.room_list()
             })
         else:
             self.clear_cookie('userinfo')
-            self.send_error(404, reason='User not found')
+            self.send_error(404, reason='Player not found')
 
 
 class LogoutHandler(RestfulHandler):

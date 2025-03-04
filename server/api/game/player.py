@@ -132,7 +132,8 @@ class Player(object):
         from .globalvar import GlobalVar
         if code == Pt.REQ_JOIN_ROOM:
             self.set_left(0)
-            room_id, level = packet.get('room', -1), packet.get('level', 1)
+            level = 1
+            room_id = packet.get('room', -1)
             if room_id == -1:
                 self.restart()
                 self.state = State.INIT
@@ -141,7 +142,8 @@ class Player(object):
                     self.room = None
                 return False
 
-            room = GlobalVar.find_room(room_id, level, self.allow_robot)
+            allow_robot = True
+            room = GlobalVar.find_room(room_id, level, allow_robot)
             if room.room_id == room_id:
                 self.room.sync_room()
                 logger.info('PLAYER[%s] REJOIN ROOM[%d]', self.uid, room.room_id)
@@ -152,8 +154,10 @@ class Player(object):
     def handle_init(self, code: int, packet: Dict[str, Any]):
         from .globalvar import GlobalVar
         if code == Pt.REQ_JOIN_ROOM:
-            room_id, level = packet.get('room', -1), packet.get('level', 1)
-            room = GlobalVar.find_room(room_id, level, self.allow_robot)
+            level = 1
+            room_id = packet.get('room', -1)
+            allow_robot = True
+            room = GlobalVar.find_room(room_id, level, allow_robot)
 
             self.state = State.WAITING
             if self.join_room(room):

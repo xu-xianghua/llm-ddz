@@ -7,14 +7,12 @@ from tornado.web import authenticated
 from tornado.websocket import WebSocketHandler, WebSocketClosedError
 
 from api.base import RestfulHandler, JwtMixin
-from models.base import AlchemyMixin
 from .globalvar import GlobalVar
 from .player import Player
 from .protocol import Protocol
-from .room import Room
 
 
-class SocketHandler(WebSocketHandler, AlchemyMixin, JwtMixin):
+class SocketHandler(WebSocketHandler, JwtMixin):
 
     def __init__(self, application, request, **kwargs):
         super().__init__(application, request, **kwargs)
@@ -34,7 +32,7 @@ class SocketHandler(WebSocketHandler, AlchemyMixin, JwtMixin):
         return self.player.uid
 
     @property
-    def room(self) -> Optional[Room]:
+    def room(self) -> Optional['Room']:
         return self.player.room
 
     @property
@@ -62,8 +60,16 @@ class SocketHandler(WebSocketHandler, AlchemyMixin, JwtMixin):
 
         logging.info('REQ[%d]: %s', self.uid, message)
 
-        if code == Protocol.REQ_ROOM_LIST:
-            self.write_message([Protocol.RSP_ROOM_LIST, {'rooms': GlobalVar.room_list()}])
+        # 简化处理逻辑
+        if code == Protocol.REQ_JOIN_ROOM:
+            # 确保level参数为1（人机对战）
+            packet['level'] = 1
+            # 确保allow_robot为True
+            self.application.allow_robot = True
+        elif code == Protocol.REQ_ROOM_LIST:
+            # 只返回人机对战的房间
+            rooms = [{'level': 1, 'number': 33}]  # 固定返回一个人机对战房间
+            self.write_message([Protocol.RSP_ROOM_LIST, {'rooms': rooms}])
             return
 
         await self.player.on_message(code, packet)
@@ -101,6 +107,10 @@ class SocketHandler(WebSocketHandler, AlchemyMixin, JwtMixin):
             logging.error('ERROR MESSAGE: %s', message)
         return None, None
 
+    async def insert(self, instance):
+        # This is a no-op in our in-memory version
+        pass
+
 
 class AdminHandler(RestfulHandler):
     required_fields = ('allow_robot',)
@@ -118,4 +128,4 @@ class AdminHandler(RestfulHandler):
             self.send_error(403, reason='Forbidden')
             return
         self.application.allow_robot = bool(self.get_body_argument('allow_robot'))
-        self.write({'allow_robot': self.application.allow_robot})
+        self.write({'allow_robot': self.application.allow_robot}) 

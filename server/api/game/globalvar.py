@@ -13,13 +13,8 @@ class GlobalVar(object):
 
     @classmethod
     def room_list(cls):
-        rooms = {1: 33, 2: 0, 3: 0}
-        for room in cls.__playing_rooms__.values():
-            if room.level in rooms:
-                rooms[room.level] += 3
-            else:
-                rooms[room.level] = 0
-        return [{'level': k, 'number': v} for k, v in rooms.items()]
+        # 简化逻辑，只返回人机对战的房间
+        return [{'level': 1, 'number': 33}]
 
     @classmethod
     def find_player(cls, uid: int, *args, **kwargs) -> Player:

@@ -1,9 +1,19 @@
-﻿
+﻿// 支持HTTP请求和本地模拟
 function get(url, payload, callback) {
+    if (window.USE_LOCAL_SIMULATION) {
+        // 本地模拟模式
+        simulateResponse('GET', url, payload, callback);
+        return;
+    }
     http('GET', url, payload, callback);
 }
 
 function post(url, payload, callback) {
+    if (window.USE_LOCAL_SIMULATION) {
+        // 本地模拟模式
+        simulateResponse('POST', url, payload, callback);
+        return;
+    }
     http('POST', url, payload, callback);
 }
 
@@ -20,6 +30,50 @@ function http(method, url, payload, callback) {
     };
     xhr.send(JSON.stringify(payload));
 }
+
+// 简化的本地模拟响应
+function simulateResponse(method, url, payload, callback) {
+    console.log(`LOCAL SIMULATION - ${method} ${url}:`, payload);
+    
+    // 模拟延迟
+    setTimeout(() => {
+        if (url === '/userinfo') {
+            // 模拟用户信息响应
+            if (window.playerInfo) {
+                callback(200, window.playerInfo);
+            } else {
+                callback(404, { detail: 'User not found' });
+            }
+        } else if (url === '/login') {
+            // 模拟登录响应
+            const playerInfo = {
+                uid: 1,
+                name: payload.name || "本地玩家",
+                point: 1000,
+                room: -1,
+                rooms: [{ level: 1, number: 1 }]
+            };
+            window.playerInfo = playerInfo;
+            callback(200, playerInfo);
+        } else {
+            // 默认响应
+            callback(404, { detail: 'Not found' });
+        }
+    }, 200);
+}
+
+// 本地初始化玩家信息
+function initLocalPlayer(name) {
+    return {
+        uid: 1,
+        name: name || "本地玩家",
+        point: 1000,
+        room: -1
+    };
+}
+
+// 设置是否使用本地模拟模式
+window.USE_LOCAL_SIMULATION = false;
 
 export class Boot {
     preload() {
@@ -84,18 +138,27 @@ export class Preloader {
 
     create() {
         const that = this;
-        get('/userinfo', {}, function (status, response) {
-            if (status === 200) {
-                window.playerInfo = response;
-                if (response['uid']) {
-                    that.state.start('MainMenu');
+        
+        if (window.USE_LOCAL_SIMULATION) {
+            // 本地初始化玩家信息
+            window.playerInfo = initLocalPlayer("本地玩家");
+            that.state.start('MainMenu');
+        } else {
+            // 通过网络请求获取玩家信息
+            get('/userinfo', {}, function (status, response) {
+                if (status === 200) {
+                    window.playerInfo = response;
+                    if (response['uid']) {
+                        that.state.start('MainMenu');
+                    } else {
+                        that.state.start('Login');
+                    }
                 } else {
                     that.state.start('Login');
                 }
-            } else {
-                that.state.start('Login');
-            }
-        });
+            });
+        }
+        
         const music = this.game.add.audio('music_room');
         music.loop = true;
         music.loopFull();
@@ -109,15 +172,11 @@ export class MainMenu {
         let bg = this.game.add.sprite(this.game.width / 2, 0, 'bg');
         bg.anchor.set(0.5, 0);
 
-        let aiRoom = this.game.add.button(this.game.world.width / 2, this.game.world.height / 4, 'btn', this.gotoAiRoom, this, 'quick.png', 'quick.png', 'quick.png');
+        let aiRoom = this.game.add.button(this.game.world.width / 2, this.game.world.height / 3, 'btn', this.gotoAiRoom, this, 'quick.png', 'quick.png', 'quick.png');
         aiRoom.anchor.set(0.5);
         this.game.world.add(aiRoom);
 
-        let humanRoom = this.game.add.button(this.game.world.width / 2, this.game.world.height / 2, 'btn', this.gotoRoom, this, 'start.png', 'start.png', 'start.png');
-        humanRoom.anchor.set(0.5);
-        this.game.world.add(humanRoom);
-
-        let setting = this.game.add.button(this.game.world.width / 2, this.game.world.height * 3 / 4, 'btn', this.gotoSetting, this, 'setting.png', 'setting.png', 'setting.png');
+        let setting = this.game.add.button(this.game.world.width / 2, this.game.world.height * 2 / 3, 'btn', this.gotoSetting, this, 'setting.png', 'setting.png', 'setting.png');
         setting.anchor.set(0.5);
         this.game.world.add(setting);
 
@@ -125,6 +184,10 @@ export class MainMenu {
         let text = this.game.add.text(this.game.world.width - 4, 4, "欢迎回来 " + window.playerInfo.name, style);
         text.addColor('#cc00cc', 4);
         text.anchor.set(1, 0);
+
+        let infoStyle = {font: "24px Arial", fill: "#fff", align: "center"};
+        let infoText = this.game.add.text(this.game.world.width / 2, this.game.world.height - 40, "单机版：仅支持人机对战", infoStyle);
+        infoText.anchor.set(0.5);
 
         // this.state.start('Game', true, false, 1);
     }
@@ -136,7 +199,8 @@ export class MainMenu {
     }
 
     gotoRoom() {
-        this.state.start('Game', true, false, 2);
+        // 保留方法但不使用
+        // this.state.start('Game', true, false, 2);
     }
 
     gotoSetting() {
@@ -179,17 +243,25 @@ export class Login {
             this.errorText.text = '请输入用户名';
             return;
         }
-        let that = this;
-        const payload = {
-            "name": this.name.value,
-        };
-        post('/login', payload, function (status, response) {
-            if (status === 200) {
-                window.playerInfo = response;
-                that.state.start('MainMenu');
-            } else {
-                that.errorText.text = response.detail;
-            }
-        })
+        
+        if (window.USE_LOCAL_SIMULATION) {
+            // 本地初始化玩家信息
+            window.playerInfo = initLocalPlayer(this.name.value);
+            this.state.start('MainMenu');
+        } else {
+            // 通过网络请求登录
+            let that = this;
+            const payload = {
+                "name": this.name.value,
+            };
+            post('/login', payload, function (status, response) {
+                if (status === 200) {
+                    window.playerInfo = response;
+                    that.state.start('MainMenu');
+                } else {
+                    that.errorText.text = response.detail;
+                }
+            });
+        }
     }
 }

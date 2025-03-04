@@ -14,6 +14,11 @@ class Observer {
     }
 
     set(key, val) {
+        // 忽略countdown相关的更新，彻底禁用倒计时
+        if (key === 'countdown') {
+            return;
+        }
+        
         const keys = key.split('.');
         if (keys.length === 1) {
             this.state[key] = val;
@@ -31,6 +36,11 @@ class Observer {
     }
 
     subscribe(key, cb) {
+        // 对于countdown订阅，提供一个空函数，不执行任何操作
+        if (key === 'countdown') {
+            return;
+        }
+        
         const subscribers = this.subscribers;
         if (subscribers.hasOwnProperty(key)) {
             subscribers[key].push(cb);
@@ -95,26 +105,9 @@ export class Game {
 
         // 创建准备按钮
         const that = this;
-        const countdown = this.game.add.text(width / 2, height / 2, '10', {
-            font: "80px",
-            fill: "#fff",
-            align: "center"
-        });
-        countdown.anchor.set(0.5);
-        countdown.visible = false;
-        observer.subscribe('countdown', function (timer) {
-            countdown.visible = timer >= 0;
-            if (timer >= 0) {
-                countdown.text = timer;
-                that.game.time.events.add(1000, function () {
-                    observer.set('countdown', observer.get('countdown') - 1);
-                }, that);
-            }
-        });
-
+        
         const ready = this.game.make.button(width / 2, height * 0.6, "btn", function () {
             this.send_message([Protocol.REQ_READY, {"ready": 1}]);
-            observer.set('countdown', 10);
         }, this, 'ready.png', 'ready.png', 'ready.png');
         ready.anchor.set(0.5, 0);
         this.game.world.add(ready);
@@ -142,7 +135,6 @@ export class Game {
 
         observer.subscribe('rob', function (is_rob) {
             group.visible = is_rob;
-            observer.set('countdown', -1);
         });
     }
 

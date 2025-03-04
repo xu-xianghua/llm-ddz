@@ -9,13 +9,15 @@ from typing import TYPE_CHECKING
 
 from tornado.ioloop import IOLoop
 
-from models import Record
 from .protocol import Protocol as Pt
 from .rule import rule
 from .timer import Timer
 
 if TYPE_CHECKING:
     from .player import Player
+
+# In-memory game records
+game_records = []
 
 
 class Room(object):
@@ -42,7 +44,7 @@ class Room(object):
         self.timer = Timer(self.on_timeout)
         self.whose_turn = 0
         self.landlord_seat = 0
-        self.bomb_multiple = 2
+        self.bomb_multiple = 2  # 炸弹倍数固定为2
 
         self.last_shot_seat = 0
         self.last_shot_poker: List[int] = []
@@ -136,7 +138,7 @@ class Room(object):
     def on_join(self, target: Player):
         if self._on_join(target):
             if self.allow_robot and self.level == 1:
-                IOLoop.current().call_later(10, self.add_robot, nth=1)
+                IOLoop.current().call_later(3, self.add_robot, nth=1)
             return True
         return False
 
@@ -252,16 +254,18 @@ class Room(object):
         IOLoop.current().add_callback(self.restart)
 
     async def save_shot_round(self):
-        for player in self.players:
-            if not player.socket:
-                continue
-            robot = self.has_robot()
-            await player.socket.insert(Record(round={
-                'left': {player.seat: player.hand_pokers for player in self.players},
-                'round': self.shot_round,
-                'lord': self.landlord.seat,
-            }, robot=robot))
-            break
+        # Instead of saving to the database, save to the in-memory list
+        robot = self.has_robot()
+        record_data = {
+            'left': {player.seat: player.hand_pokers for player in self.players},
+            'round': self.shot_round,
+            'lord': self.landlord.seat,
+            'robot': robot
+        }
+        game_records.append(record_data)
+        # Limit the number of records to keep memory usage reasonable
+        if len(game_records) > 100:
+            game_records.pop(0)
 
     @property
     def multiple(self) -> int:

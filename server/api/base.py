@@ -1,32 +1,43 @@
 import asyncio
+import base64
+import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Optional, Awaitable, Dict, Union, Any
 
-import jwt
-import orjson
 from tornado.web import RequestHandler, HTTPError
 
 from config import SECRET_KEY
-from models.base import AlchemyMixin
 
 
 class JwtMixin(object):
 
     @staticmethod
     def jwt_encode(payload: Dict[str, Union[str, int]]) -> str:
-        expires = datetime.utcnow() + timedelta(seconds=3600)
-        return jwt.encode({'exp': expires, **payload}, SECRET_KEY, algorithm='HS256')
+        # 简化JWT编码，设置1小时过期时间
+        expires = datetime.now(timezone.utc) + timedelta(hours=1)
+        data = {'exp': expires.timestamp(), **payload}
+        json_str = json.dumps(data)
+        return base64.b64encode(json_str.encode('utf-8')).decode('utf-8')
 
     @staticmethod
     def jwt_decode(token) -> Optional[Dict[str, Union[str, int]]]:
         if not token:
             return None
         try:
-            return jwt.decode(token, SECRET_KEY)
-        except jwt.PyJWTError as e:
-            logging.error('JWT', e)
+            # 解码JWT
+            json_str = base64.b64decode(token).decode('utf-8')
+            data = json.loads(json_str)
+            
+            # 检查是否过期
+            if 'exp' in data and datetime.fromtimestamp(data['exp'], tz=timezone.utc) < datetime.now(timezone.utc):
+                logging.error('Token expired')
+                return None
+                
+            return data
+        except Exception as e:
+            logging.error('Token decode error: %s', e)
             return None
 
     @staticmethod
@@ -39,7 +50,7 @@ class JwtMixin(object):
         return None
 
 
-class RestfulHandler(RequestHandler, AlchemyMixin):
+class RestfulHandler(RequestHandler):
     required_fields = ()
 
     def prepare(self):
@@ -54,7 +65,7 @@ class RestfulHandler(RequestHandler, AlchemyMixin):
         self.set_header('Access-Control-Allow-Credentials', 'true')
 
     def get_json_data(self) -> Dict[str, Any]:
-        json_data: Dict[str, Any] = orjson.loads(self.request.body)
+        json_data: Dict[str, Any] = json.loads(self.request.body)
         if self.required_fields:
             for field in self.required_fields:
                 if field not in json_data:
@@ -64,14 +75,14 @@ class RestfulHandler(RequestHandler, AlchemyMixin):
     def get_current_user(self) -> Optional[Dict[str, Any]]:
         cookie = self.get_secure_cookie('userinfo')
         if cookie:
-            return orjson.loads(cookie)
+            return json.loads(cookie)
         return None
 
     def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
         pass
 
     def write_error(self, status_code: int, **kwargs: Any) -> None:
-        self.finish(orjson.dumps({"detail": self._reason}))
+        self.finish(json.dumps({"detail": self._reason}))
 
     @property
     def client_ip(self) -> str:
@@ -80,4 +91,4 @@ class RestfulHandler(RequestHandler, AlchemyMixin):
 
     async def run_in_executor(self, func, *args):
         executor = self.application.executor
-        return await asyncio.get_event_loop().run_in_executor(executor, func, *args)
+        return await asyncio.get_running_loop().run_in_executor(executor, func, *args)

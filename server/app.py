@@ -2,15 +2,12 @@ import asyncio
 import logging.config
 from concurrent.futures import ThreadPoolExecutor
 
-import tornado.locks
 import tornado.web
 import tornado.websocket
-import uvloop
 from tornado.process import cpu_count
 
 from api.auth import IndexHandler, LoginHandler, UserInfoHandler
 from api.game.views import SocketHandler
-from api.wx import WechatConfig, WechatHandler
 from config import DEBUG, LOGGING, PORT, SECRET_KEY, TEMPLATE_ROOT, STATIC_ROOT, STATIC_URL
 
 logging.config.dictConfig(LOGGING)
@@ -35,8 +32,6 @@ class Application(tornado.web.Application):
             ('/login', LoginHandler),
             ('/userinfo', UserInfoHandler),
             ('/ws', SocketHandler),
-            ('/social/config', WechatConfig),
-            ('/social/index', WechatHandler),
         ]
         super().__init__(url_patterns, **settings)
         self.executor = ThreadPoolExecutor(cpu_count() * 2)
@@ -44,12 +39,19 @@ class Application(tornado.web.Application):
 
 
 async def main():
-    app = Application()
-    app.listen(PORT)
-    logging.info(f'server on http://127.0.0.1:{PORT}')
-    await asyncio.Event().wait()
+    try:
+        app = Application()
+        app.listen(PORT)
+        logging.info(f'server on http://127.0.0.1:{PORT}')
+        await asyncio.Event().wait()
+    except OSError as e:
+        if e.errno == 48:  # Address already in use
+            logging.error(f"端口 {PORT} 已被占用，请先关闭占用该端口的进程")
+        else:
+            logging.error(f"启动服务器时发生错误: {e}")
+    except Exception as e:
+        logging.error(f"启动服务器时发生未知错误: {e}")
 
 
 if __name__ == '__main__':
-    uvloop.install()
     asyncio.run(main())
