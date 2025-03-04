@@ -1,6 +1,5 @@
 import React from 'react';
 import {Login, } from './components/Login'
-import Github from './components/Github'
 import Game from './game/Index'
 
 class App extends React.Component {
@@ -22,7 +21,7 @@ class App extends React.Component {
 	render() {
 		switch (this.state.page) {
 			case 'login':
-                return <div><Login onChange={(page, response) => this.onChange(page, response)}/> <Github/></div>;
+                return <div><Login onChange={(page, response) => this.onChange(page, response)}/></div>;
 			case "game":
             default:
                 return <Game onChange={(page, response) => this.onChange(page, response)}/>;
