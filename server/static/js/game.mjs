@@ -82,6 +82,16 @@ export class Game {
         Rule.RuleList = this.cache.getJSON('rule');
         this.stage.backgroundColor = '#182d3b';
 
+        // 初始化背景音乐
+        this.backgroundMusic = this.game.add.audio('music_game');
+        this.backgroundMusic.loop = true;
+        
+        // 根据设置决定是否播放音乐
+        const musicEnabled = localStorage.getItem('musicEnabled') === 'true';
+        if (musicEnabled && !this.game.sound.mute) {
+            this.backgroundMusic.play();
+        }
+
         this.players.push(createPlay(0, this));
         this.players.push(createPlay(1, this));
         this.players.push(createPlay(2, this));
