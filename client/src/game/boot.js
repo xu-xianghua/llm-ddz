@@ -52,18 +52,19 @@ class MenuScene extends Phaser.Scene {
         bg.setOrigin(0.5, 0);
 
         const self = this;
-        let aiRoom = this.add.sprite(this.game.config.width / 2, this.game.config.height / 4, 'ui', 'quick.png');
+        let aiRoom = this.add.sprite(this.game.config.width / 2, this.game.config.height / 3, 'ui', 'quick.png');
         aiRoom.setInteractive().on('pointerup', () => this.gotoAiRoom());
 
-        let humanRoom = this.add.sprite(this.game.config.width / 2, this.game.config.height / 2, 'ui', 'start.png');
-        humanRoom.setInteractive().on('pointerup', () => this.gotoAiRoom());
-
-        let setting = this.add.sprite(this.game.config.width / 2, this.game.config.height * 3 / 4, 'ui', 'setting.png');
+        let setting = this.add.sprite(this.game.config.width / 2, this.game.config.height * 2 / 3, 'ui', 'setting.png');
         setting.setOrigin(0.5);
 
         let style = {fontSize: "28px", backgroundColor: "#f0f0f0", color: "#333", align: "left"};
         let text = this.add.text(15, 10, "欢迎回来 " + PG.playerInfo.username, style);
         text.setOrigin(0, 0);
+        
+        let infoStyle = {fontSize: "24px", color: "#fff", align: "center"};
+        let infoText = this.add.text(this.game.config.width / 2, this.game.config.height - 40, "单机版：仅支持人机对战", infoStyle);
+        infoText.setOrigin(0.5);
     }
 
     gotoAiRoom() {
