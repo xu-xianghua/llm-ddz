@@ -1,2 +1,10 @@
 tornado==6.4.2
-openai==1.12.0
+openai==1.65.3
+anyio==4.8.0
+certifi==2025.1.31
+distro==1.9.0
+httpcore==1.0.7
+httpx==0.28.1
+pydantic==2.10.6
+tqdm==4.67.1
+typing_extensions==4.12.2

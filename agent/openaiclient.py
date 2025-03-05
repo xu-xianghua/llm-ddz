@@ -69,11 +69,11 @@ class OpenAIClient:
         self.frequency_penalty = frequency_penalty
         self.presence_penalty = presence_penalty
 
-        # 创建 OpenAI 客户端，不使用代理
+        # 创建 OpenAI 客户端
         self.client = OpenAI(
             api_key=api_key,
             base_url=base_url,
-            http_client=None  # 使用默认的 HTTP 客户端
+            timeout=60.0  # 设置超时时间为60秒
         )
 
     @retry_on_error(max_retries=3)

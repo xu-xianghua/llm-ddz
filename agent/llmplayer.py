@@ -1,6 +1,7 @@
 import logging
 import asyncio
 from typing import List, Dict, Any, Optional, Tuple
+from tornado.ioloop import IOLoop
 
 # from server.api.game.player import Player
 from server.api.game.components.simple import RobotPlayer
@@ -87,6 +88,7 @@ class LLMPlayer(RobotPlayer):
             # 获取当前游戏状态
             last_player_position = self.room.last_shot_seat
             last_played_cards = self.room.last_shot_poker if self.room.last_shot_seat != self.seat else []
+            is_follow = len(last_played_cards) > 0  # 是否是跟牌
             
             logger.info(f"LLM玩家[{self.uid}]开始决策出牌...")
             logger.info(f"当前手牌: {self.hand_pokers}")
@@ -99,7 +101,7 @@ class LLMPlayer(RobotPlayer):
                 last_player_position,
                 self.seat,
                 self.landlord == 1,
-                is_follow=len(last_played_cards) > 0
+                is_follow=is_follow
             )
             
             logger.info(f"LLM玩家[{self.uid}]决策结果: {decision}")
@@ -109,8 +111,14 @@ class LLMPlayer(RobotPlayer):
                 logger.warning(f"LLM玩家[{self.uid}]出牌不合法: {decision}")
                 decision = []
             
-            # 发送出牌请求
-            IOLoop.current().call_later(self.decision_delay, self.to_server, Pt.REQ_SHOT_POKER, {'pokers': decision})
+            # 如果是主动出牌且没有决策结果，使用父类的策略
+            if not decision and not is_follow:
+                logger.info(f"LLM玩家[{self.uid}]主动出牌决策为空，使用规则引擎出牌")
+                super().auto_shot()
+            else:
+                # 发送出牌请求（包括跟牌时的不出）
+                logger.info(f"LLM玩家[{self.uid}]发送出牌请求: {decision}")
+                IOLoop.current().call_later(self.decision_delay, self.to_server, Pt.REQ_SHOT_POKER, {'pokers': decision})
             
         except CardDecisionError as e:
             logger.error(f"LLM玩家[{self.uid}]决策出错: {e}")
