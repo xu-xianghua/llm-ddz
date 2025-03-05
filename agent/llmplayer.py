@@ -63,19 +63,16 @@ class LLMPlayer(RobotPlayer):
             packet: 请求数据包
         """
         logger.info(f"LLM玩家[{self.uid}]处理叫分请求: code={code}, packet={packet}")
-        if code == Pt.REQ_CALL_SCORE:
-            # 获取历史叫分记录
-            history_calls = []
+        if code == Pt.REQ_CALL_SCORE:            
+            history_calls = [] # 历史叫分记录
             for player in self.room.players:
                 if player.rob != -1:
                     history_calls.append((player.seat, player.rob))
             
             logger.info(f"LLM玩家[{self.uid}]历史叫分记录: {history_calls}")
-            logger.info(f"LLM玩家[{self.uid}]手牌: {self.hand_pokers}")
             
             try:
                 logger.info(f"LLM玩家[{self.uid}]开始决策是否叫地主...")
-                # 使用LLM决策是否叫地主
                 decision = self.card_player.decide_call_landlord(
                     self.hand_pokers,
                     history_calls
@@ -85,28 +82,21 @@ class LLMPlayer(RobotPlayer):
                                 
                 # 设置叫分结果
                 self.rob = decision
-                logger.info(f"LLM玩家[{self.uid}]设置叫分结果: {self.rob}")
                 
-                # 处理叫分结果
                 is_end = self.room.on_rob(self)
-                logger.info(f"LLM玩家[{self.uid}]叫分是否结束: {is_end}")
                 
                 if is_end:
                     logger.info(f"LLM玩家[{self.uid}]叫分结束，切换状态到PLAYING")
-                    self.change_state(3)  # State.PLAYING
+                    self.change_state(State.PLAYING)  # 
                     logger.info(f'ROB END LANDLORD[{self.room.landlord}]')
                     
                     # 检查是否是地主
                     landlord = self.room.landlord
                     if landlord and landlord.uid == self.uid:
                         logger.info(f"LLM玩家[{self.uid}]成为地主")
-                        # 使用新方法设置为地主并添加底牌
                         if self.room.pokers and len(self.room.pokers) > 0:
                             logger.info(f"LLM玩家[{self.uid}]获得底牌: {self.room.pokers}")
-                            # self.set_as_landlord(self.room.pokers)
-                            # 打印手牌信息
                             logger.info(f"LLM玩家[{self.uid}]当前手牌: {self._hand_pokers}, 牌数: {len(self._hand_pokers)}")
-                            logger.info(f"LLM玩家[{self.uid}]调试信息: {self.debug_info}")
                 
                 # 广播叫分结果
                 response = [Pt.RSP_CALL_SCORE, {
