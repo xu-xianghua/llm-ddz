@@ -1,5 +1,6 @@
 import React from 'react'
 import './Login.css'
+import { store, TOGGLE_MUSIC } from '../game/store'
 
 // const cookie = function (name) {
 // 	let r = document.cookie.match("\\b" + name + "=([^;]*)\\b");
@@ -31,9 +32,11 @@ class Login extends React.Component {
 		this.state = {
 			username: '1',
 			password: '1',
+			musicEnabled: localStorage.getItem('musicEnabled') !== 'false' // 从localStorage读取音乐设置
 		};
 		this.handleChange = this.handleChange.bind(this);
 		this.handleSubmit = this.handleSubmit.bind(this);
+		this.toggleMusic = this.toggleMusic.bind(this);
 	}
 
 	handleChange(event) {
@@ -47,6 +50,15 @@ class Login extends React.Component {
 		const data = {"username": this.state.username, "password": this.state.password};
 		const self = this;
 		post('/login', data, response => self.props.onChange("game", response));
+	}
+
+	toggleMusic() {
+		// 切换音乐状态
+		store.dispatch({ type: TOGGLE_MUSIC });
+		// 更新组件状态
+		this.setState({ 
+			musicEnabled: localStorage.getItem('musicEnabled') !== 'false' 
+		});
 	}
 
 	render() {
@@ -66,6 +78,19 @@ class Login extends React.Component {
 								 value={this.state.password}
 								 onChange={this.handleChange}
 								 placeholder="密码" required/>
+					
+					{/* 添加音乐开关选项 */}
+					<div className="music-toggle">
+						<label>
+							<input 
+								type="checkbox" 
+								checked={this.state.musicEnabled} 
+								onChange={this.toggleMusic}
+							/>
+							开启背景音乐
+						</label>
+					</div>
+					
 					<input type="submit" className="submit" value="登录"/>
 				</form>
 			</div>

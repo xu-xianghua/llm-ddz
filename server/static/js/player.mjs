@@ -229,6 +229,7 @@ export class Player {
     }
 
     dealPoker() {
+        console.log(`玩家${this.seat}开始发牌，手牌:`, this.pokerInHand);
         this.sortPoker();
         let length = this.pokerInHand.length;
         for (let i = 0; i < length; i++) {
@@ -237,7 +238,9 @@ export class Player {
             this.game.world.add(p);
             this.pushAPoker(p);
             this.dealPokerAnim(p, i);
+            console.log(`玩家${this.seat}添加第${i+1}张牌:`, pid);
         }
+        console.log(`玩家${this.seat}发牌完成`);
     }
 
     dealPokerAnim(p, i) {
@@ -260,6 +263,7 @@ export class Player {
     }
 
     pushAPoker(poker) {
+        console.log(`玩家${this.seat}添加牌:`, poker.id);
         this._pokerPic[poker.id] = poker;
 
         poker.events.onInputDown.add(this.onInputDown, this);

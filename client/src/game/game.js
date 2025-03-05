@@ -15,15 +15,46 @@ class GameScene extends Phaser.Scene {
         this.lastShotPlayer = null;
         this.whoseTurn = 0;
         this.RuleList = this.cache.json['rule'];
+        this.backgroundMusic = null;
     }
 
     create() {
+        console.log("GameScene create method called!");
         // this.stage.backgroundColor = '#182d3b';
         // Socket.connect(this.onopen.bind(this), this.onmessage.bind(this), this.onerror.bind(this));
         this.players = [new Player(0), new Player(1), new Player(2)];
         this.createRoom();
         this.createHead();
         this.createPoker();
+        
+        // 初始化背景音乐
+        this.initBackgroundMusic();
+    }
+    
+    // 初始化背景音乐
+    initBackgroundMusic() {
+        // 加载背景音乐
+        this.backgroundMusic = this.sound.add('music_game');
+        this.backgroundMusic.loop = true;
+        
+        // 根据设置决定是否播放音乐
+        const musicEnabled = store.getState().settings.musicEnabled;
+        if (musicEnabled) {
+            this.backgroundMusic.play();
+        }
+        
+        // 监听音乐设置变化
+        subscribe('settings.musicEnabled', state => {
+            if (state.settings.musicEnabled) {
+                if (!this.backgroundMusic.isPlaying) {
+                    this.backgroundMusic.play();
+                }
+            } else {
+                if (this.backgroundMusic.isPlaying) {
+                    this.backgroundMusic.stop();
+                }
+            }
+        });
     }
 
     createRoom() {

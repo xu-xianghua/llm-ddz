@@ -12,6 +12,7 @@ export const SER_SHOT_POKER = 'ser_shot_poker';
 export const SER_GAME_OVER = 'ser_game_over';
 
 export const SER_CHAT = 'ser_chat';
+export const TOGGLE_MUSIC = 'toggle_music';
 
 const table = function (state, action) {
     if (typeof state === 'undefined') {
@@ -126,12 +127,33 @@ const pokers = function (state, action) {
     }
 };
 
-const store = createStore(combineReducers({
+const settings = function (state, action) {
+    if (typeof state === 'undefined') {
+        // 从localStorage读取音乐设置，默认为开启
+        const musicEnabled = localStorage.getItem('musicEnabled') !== 'false';
+        state = {
+            musicEnabled: musicEnabled
+        };
+    }
+    switch (action.type) {
+        case TOGGLE_MUSIC:
+            // 保存设置到localStorage
+            localStorage.setItem('musicEnabled', !state.musicEnabled);
+            return {...state, musicEnabled: !state.musicEnabled};
+        default:
+            return state;
+    }
+};
+
+const reducers = combineReducers({
     table,
     players,
     pokerInHand,
-    pokers
-}));
+    pokers,
+    settings
+});
+
+const store = createStore(reducers);
 
 const subscribe = initSubscriber(store);
 

@@ -4,9 +4,11 @@ export class Poker extends Phaser.Sprite {
     static PH = 120;
 
     constructor(game, id, frame) {
+        console.log("创建牌:", id, frame);
         super(game, game.world.width / 2, game.world.height * 0.4, 'poker', frame - 1);
         this.anchor.set(0.5);
         this.id = id;
+        console.log("牌创建完成:", this);
     }
 
     static comparePoker(a, b) {

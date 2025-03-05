@@ -1,1 +1,2 @@
 tornado==6.4.2
+openai==1.12.0

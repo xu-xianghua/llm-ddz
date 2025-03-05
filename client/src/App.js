@@ -10,7 +10,7 @@ class App extends React.Component {
 		const token = localStorage.getItem('token');
 		this.state = {
 			token: token,
-			page: !!token ? 'login' : 'game',
+			page: !!token ? 'game' : 'login',
 		}
 	}
 
