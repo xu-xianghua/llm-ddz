@@ -54,6 +54,10 @@ class LLMPlayer(RobotPlayer):
             "hand_after_bottom": []
         }
 
+    def restart(self):
+        self.card_player.reset()
+        return super().restart()
+
     def auto_rob(self):
         """重写auto_rob方法，使用LLM进行叫分决策"""
         try:
