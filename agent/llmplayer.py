@@ -1,5 +1,4 @@
 import logging
-import asyncio
 from typing import List, Dict, Any, Optional, Tuple
 from tornado.ioloop import IOLoop
 
@@ -67,11 +66,10 @@ class LLMPlayer(RobotPlayer):
                 if player.rob != -1:
                     history_calls.append((player.seat, player.rob))
             
-            logger.info(f"LLM玩家[{self.uid}]历史叫分记录: {history_calls}")
+            # logger.info(f"LLM玩家[{self.uid}]历史叫分记录: {history_calls}")
             logger.info(f"LLM玩家[{self.uid}]手牌: {self.hand_pokers}")
             
             # 使用LLM决策是否叫地主
-            logger.info(f"LLM玩家[{self.uid}]开始决策是否叫地主...")
             decision = self.card_player.decide_call_landlord(
                 self.hand_pokers,
                 history_calls
@@ -89,20 +87,20 @@ class LLMPlayer(RobotPlayer):
     def auto_shot(self):
         """重写auto_shot方法，使用LLM进行出牌决策"""
         try:
-            # 获取当前游戏状态
+            # 获取上家出牌信息
             last_player_position = self.room.last_shot_seat
             last_played_cards = self.room.last_shot_poker if self.room.last_shot_seat != self.seat else []
             is_follow = len(last_played_cards) > 0  # 是否是跟牌
             
-            logger.info(f"LLM玩家[{self.uid}]开始决策出牌...")
-            logger.info(f"当前手牌: {self.hand_pokers}")
-            logger.info(f"上家出牌: {last_played_cards}")
+            logger.info(f"LLM玩家[{self.uid}]决策出牌...")
             
+            last_player_is_landlord = self.room.players[last_player_position].landlord == 1
             # 使用LLM决策出牌
             decision = self.card_player.decide_play_cards(
                 self.hand_pokers,
                 last_played_cards,
                 last_player_position,
+                last_player_is_landlord,
                 self.seat,
                 self.landlord == 1,
                 is_follow=is_follow
@@ -110,17 +108,50 @@ class LLMPlayer(RobotPlayer):
             
             logger.info(f"LLM玩家[{self.uid}]决策结果: {decision}")
             
-            # 验证出牌合法性
+            # 验证出牌合法性（检查手牌中是否有这些牌）
             if decision and not rule.is_contains(self._hand_pokers, decision):
                 logger.warning(f"LLM玩家[{self.uid}]出牌不合法: {decision}")
                 decision = []
             
+            # 如果是跟牌，验证出牌是否符合规则（是否大于上家出牌）
+            if decision and is_follow:
+                # 获取出牌类型
+                decision_cards = rule._to_cards(decision)
+                last_cards = rule._to_cards(last_played_cards)
+                
+                # 检查牌型是否相同
+                decision_type, _ = rule._get_cards_value(decision_cards)
+                last_type, _ = rule._get_cards_value(last_cards)
+                
+                # 比较牌的大小
+                compare_result = rule.compare_pokers(decision, last_played_cards)
+                
+                # 如果牌型不同且不是炸弹或火箭，或者牌型相同但比上家小，则出牌无效
+                if (decision_type != last_type and decision_type not in ['bomb', 'rocket']) or compare_result <= 0:
+                    logger.warning(f"LLM玩家[{self.uid}]出牌不符合规则: {decision_type} vs {last_type}, 比较结果: {compare_result}")
+                    decision = []
+            
+            # 如果是主动出牌，验证出牌是否符合规则（是否是有效的牌型）
+            if decision and not is_follow:
+                # 获取出牌类型
+                decision_cards = rule._to_cards(decision)
+                decision_type, _ = rule._get_cards_value(decision_cards)
+                
+                # 如果不是有效的牌型，则出牌无效
+                if not decision_type:
+                    logger.warning(f"LLM玩家[{self.uid}]出牌不是有效的牌型: {decision}")
+                    decision = []
+            
             # 如果是主动出牌且没有决策结果，使用父类的策略
             if not decision and not is_follow:
-                logger.info(f"LLM玩家[{self.uid}]主动出牌决策为空，使用规则引擎出牌")
+                logger.info(f"LLM玩家[{self.uid}]主动出牌决策为空或不合法，使用规则引擎出牌")
                 super().auto_shot()
+            # 如果是跟牌且没有决策结果，选择不出
+            elif not decision and is_follow:
+                logger.info(f"LLM玩家[{self.uid}]跟牌决策为空或不合法，选择不出")
+                IOLoop.current().call_later(self.decision_delay, self.to_server, Pt.REQ_SHOT_POKER, {'pokers': []})
             else:
-                # 发送出牌请求（包括跟牌时的不出）
+                # 发送出牌请求
                 logger.info(f"LLM玩家[{self.uid}]发送出牌请求: {decision}")
                 IOLoop.current().call_later(self.decision_delay, self.to_server, Pt.REQ_SHOT_POKER, {'pokers': decision})
             
@@ -137,6 +168,36 @@ class LLMPlayer(RobotPlayer):
         # LLM玩家不应该超时，但如果发生了，使用规则引擎的决策
         super().on_timeout()
         
+    def _write_message(self, packet):
+        """处理服务器发送的消息
+        
+        重写父类的方法，添加对错误消息的处理。
+        
+        Args:
+            packet: 消息包
+        """
+        code = packet[0]
+        
+        # 处理错误消息
+        if code == Pt.ERROR:
+            error_reason = packet[1].get('reason', '')
+            logger.warning(f"LLM玩家[{self.uid}]收到错误消息: {error_reason}")
+            
+            # 如果是出牌相关的错误，且当前是自己的回合，尝试重新出牌
+            if ('Poker' in error_reason or 'poker' in error_reason) and self.room.turn_player == self:
+                logger.info(f"LLM玩家[{self.uid}]尝试重新出牌")
+                # 如果是跟牌，选择不出
+                if self.room.last_shot_seat != self.seat:
+                    logger.info(f"LLM玩家[{self.uid}]选择不出牌")
+                    IOLoop.current().call_later(self.decision_delay, self.to_server, Pt.REQ_SHOT_POKER, {'pokers': []})
+                else:
+                    # 如果是主动出牌，使用规则引擎出牌
+                    logger.info(f"LLM玩家[{self.uid}]使用规则引擎出牌")
+                    super().auto_shot()
+            return
+            
+        # 调用父类的方法处理其他消息
+        super()._write_message(packet)
 
 # 创建LLM玩家的工厂函数
 def create_llm_player(
