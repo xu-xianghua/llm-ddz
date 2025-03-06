@@ -171,15 +171,12 @@ class LLMCardPlayer:
 
 例如：<anser>1</anser> 表示叫地主，<anser>0</anser> 表示不叫。
 考虑你手牌的强度，做出最佳决策。"""
-            logger.info("构建提示信息完成，准备调用LLM")
             
             # 获取LLM的决策
-            logger.info("开始调用LLM进行决策")
+            # logger.info("开始调用LLM进行决策")
             response = self.agent.chat_once(prompt)
             logger.info(f"LLM响应: {response}")
             
-            # 解析决策结果
-            logger.info("开始解析决策结果")
             decision = self._parse_call_decision(response)
             logger.info(f"LLM决定{'叫地主' if decision == 1 else '不叫地主'}")
             return decision
@@ -198,6 +195,7 @@ class LLMCardPlayer:
         hand_cards: List[int], 
         last_played_cards: List[int], 
         last_player_position: int,
+        last_player_is_landlord: bool,
         my_position: int,
         is_landlord: bool,
         is_follow: bool = False
@@ -208,6 +206,7 @@ class LLMCardPlayer:
             hand_cards: 手牌列表
             last_played_cards: 上家出的牌
             last_player_position: 上家的位置（0, 1, 2）
+            last_player_is_landlord: 上家是否是地主
             my_position: 自己的位置（0, 1, 2）
             is_landlord: 是否是地主
             is_follow: 是否跟随上家出牌
@@ -221,15 +220,23 @@ class LLMCardPlayer:
             # 将手牌和上家出牌转换为可读格式
             readable_hand = self._convert_cards_to_readable(hand_cards)
             readable_last = self._convert_cards_to_readable(last_played_cards) if last_played_cards else "无"
-            
+            logger.info(f"手牌: {readable_hand}, 上家出牌: {readable_last}")
             # 构建提示信息
             if is_follow:
                 prompt = f"""当前游戏状态：
 - 你的手牌：{readable_hand}
 - 上家出牌：{readable_last}
 - 上家位置：{last_player_position}
+- 上家身份：{'地主' if last_player_is_landlord else '农民'}
 - 你的位置：{my_position}
 - 你的身份：{'地主' if is_landlord else '农民'}
+
+出牌规则：
+1. 如果上家出牌，你必须出比上家大的牌，或者选择不出（PASS）
+2. 出牌必须符合牌型，例如上家出单张，你必须出单张；上家出对子，你必须出对子
+3. 炸弹和火箭可以打任何牌型
+4. 牌的大小顺序：3 < 4 < 5 < 6 < 7 < 8 < 9 < 10 < J < Q < K < A < 2 < 小王 < 大王
+5. 同样牌型比较大小时，比较牌面点数
 
 考虑当前游戏局势，做出符合上家出牌规则的最佳出牌决策。如果选择不出，请只回答 "<anser>PASS</anser>"。
 如果要出牌，请列出要出的牌，放到<anser>标签中，例如："<anser>3 4 5 6 7</anser>"或"<anser>对3 对4</anser>"。只给出答案，不要无关的话。
@@ -240,19 +247,24 @@ class LLMCardPlayer:
 - 你的位置：{my_position}
 - 你的身份：{'地主' if is_landlord else '农民'}
 
+出牌规则：
+1. 首次出牌可以出任何有效的牌型
+2. 牌型包括：单张、对子、三张、三带一、三带二、顺子、连对、飞机、炸弹、火箭等
+3. 牌的大小顺序：3 < 4 < 5 < 6 < 7 < 8 < 9 < 10 < J < Q < K < A < 2 < 小王 < 大王
+
 考虑当前游戏局势，做出最佳出牌决策。
 你必须出牌，列出要出的牌，放到<anser>标签中，例如："<anser>3 4 5 6 7</anser>"或"<anser>对3 对4</anser>"。只给出答案，不要无关的话。
 """
             # 获取LLM的决策
             response = self.agent.chat_once(prompt)
             
-            # 解析决策结果
+            # 解析决策结果，传入手牌以便转换为真实的牌
             decision = self._parse_play_decision(response, hand_cards)
             
-            if decision:
-                logger.info(f"LLM决定出牌: {self._convert_cards_to_readable(decision)}")
-            else:
-                logger.info("LLM决定不出牌(PASS)")
+            # if decision:
+            #     logger.info(f"LLM决定出牌: {self._convert_cards_to_readable(decision)}")
+            # else:
+            #     logger.info("LLM决定不出牌(PASS)")
                 
             return decision
             
@@ -333,14 +345,27 @@ class LLMCardPlayer:
             logger.info("解析结果: 不出牌")
             return []
         
-        # 统计手牌中每种牌的数量
-        hand_cards_str = [self._card_to_str(card) for card in hand_cards]
-        hand_cards_count = {}
-        for card in hand_cards_str:
-            hand_cards_count[card] = hand_cards_count.get(card, 0) + 1
+        # 特殊处理"王炸"
+        if re.search(r'王炸|火箭|大小王|[Ww][Ww]', anser_content, re.IGNORECASE):
+            # 检查手牌中是否有大小王
+            has_big_joker = 54 in hand_cards
+            has_small_joker = 53 in hand_cards
+            
+            if has_big_joker and has_small_joker:
+                logger.info("解析结果: 王炸")
+                return [53, 54]  # 小王和大王
+            else:
+                logger.warning("决策为王炸，但手牌中没有足够的王")
+                return []
         
-        logger.info(f"手牌统计: {hand_cards_count}")
-        
+        # 将手牌按牌面值分组，以便后续转换为真实的牌
+        hand_cards_by_face = {}
+        for card in hand_cards:
+            face = self._card_to_str(card)
+            if face not in hand_cards_by_face:
+                hand_cards_by_face[face] = []
+            hand_cards_by_face[face].append(card)
+                
         # 提取牌面表示
         # 处理常见的牌型表达方式
         card_patterns = [
@@ -354,31 +379,41 @@ class LLMCardPlayer:
             r'四个([3-9TJQKA2])', # 匹配"四个X"格式
             r'四张([3-9TJQKA2])', # 匹配"四张X"格式
             r'[3-9TJQKA2]',       # 匹配单个牌面
-            r'10|十'              # 特别处理10
+            r'10|十',             # 特别处理10
+            r'[wW]'               # 匹配大小王
         ]
         
-        extracted_cards = []
-        extracted_cards_count = {}
+        # 提取的牌面值和对应的数量
+        extracted_faces = {}
         
         # 特别处理10，直接从文本中提取
         ten_matches = re.finditer(r'10|十', anser_content)
         for match in ten_matches:
             if match.group() in ['10', '十']:
-                card = '10'
-                if card in hand_cards_str and extracted_cards_count.get(card, 0) < hand_cards_count.get(card, 0):
-                    extracted_cards.append(card)
-                    extracted_cards_count[card] = extracted_cards_count.get(card, 0) + 1
+                face = '10'
+                extracted_faces[face] = extracted_faces.get(face, 0) + 1
+        
+        # 特别处理大小王，直接从文本中提取
+        joker_matches = re.finditer(r'[wW]|小王|大王', anser_content)
+        for match in joker_matches:
+            joker = match.group()
+            if joker in ['w', '小王']:
+                face = 'w'
+                extracted_faces[face] = extracted_faces.get(face, 0) + 1
+            elif joker in ['W', '大王']:
+                face = 'W'
+                extracted_faces[face] = extracted_faces.get(face, 0) + 1
         
         # 提取其他牌面
         for pattern in card_patterns:
-            if pattern in ['10|十']:  # 已经处理过10了
+            if pattern in ['10|十', '[wW]']:  # 已经处理过10和大小王了
                 continue
                 
             matches = re.finditer(pattern, anser_content)
             for match in matches:
                 if len(match.groups()) > 0:
                     # 处理带有分组的模式
-                    card = match.group(1)
+                    face = match.group(1)
                     # 根据模式确定牌的数量
                     if '对' in pattern or '两个' in pattern:
                         count = 2
@@ -392,35 +427,40 @@ class LLMCardPlayer:
                         count = len(full_match)
                 else:
                     # 处理单个牌面的模式
-                    card = match.group(0)
+                    face = match.group(0)
                     count = 1
                 
                 # 确保不是10的一部分
-                if card in ['1', '0']:
+                if face in ['1', '0']:
                     # 检查是否是10的一部分
                     start_pos = match.start()
-                    if (card == '1' and start_pos + 1 < len(anser_content) and anser_content[start_pos + 1] == '0') or \
-                       (card == '0' and start_pos > 0 and anser_content[start_pos - 1] == '1'):
+                    if (face == '1' and start_pos + 1 < len(anser_content) and anser_content[start_pos + 1] == '0') or \
+                       (face == '0' and start_pos > 0 and anser_content[start_pos - 1] == '1'):
                         continue
                 
-                # 添加提取的牌，但不超过手牌中的数量
-                for _ in range(count):
-                    if card in hand_cards_str and extracted_cards_count.get(card, 0) < hand_cards_count.get(card, 0):
-                        extracted_cards.append(card)
-                        extracted_cards_count[card] = extracted_cards_count.get(card, 0) + 1
+                # 累加提取的牌面数量
+                extracted_faces[face] = extracted_faces.get(face, 0) + count
         
-        logger.info(f"提取的牌面: {extracted_cards}, 统计: {extracted_cards_count}")
+        # logger.info(f"提取的牌面及数量: {extracted_faces}")
         
-        # 转换为整数表示
+        # 检查是否有足够的牌并转换为真实的牌
         result = []
-        for card_str in extracted_cards:
-            card_int = self._str_to_card(card_str)
-            if card_int in hand_cards:
-                result.append(card_int)
-                # 从手牌中移除已使用的牌，防止重复使用
-                hand_cards.remove(card_int)
-            else:
-                logger.warning(f"提取的牌 {card_str} 不在手牌中或已被使用")
+        valid = True
+        
+        for face, count in extracted_faces.items():
+            if face not in hand_cards_by_face or len(hand_cards_by_face[face]) < count:
+                logger.warning(f"手牌中没有足够的 {face}，需要 {count} 张，但只有 {len(hand_cards_by_face.get(face, []))} 张")
+                valid = False
+                break
+            
+            # 使用真实的手牌
+            result.extend(hand_cards_by_face[face][:count])
+            # 从可用牌中移除已使用的牌
+            hand_cards_by_face[face] = hand_cards_by_face[face][count:]
+        
+        if not valid:
+            logger.warning(f"决策无效，手牌中没有足够的牌")
+            return []
         
         logger.info(f"解析结果: {result}")
         return result
