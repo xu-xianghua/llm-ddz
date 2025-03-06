@@ -91,7 +91,7 @@ class OpenAIClient:
         """
         logger.info(f"开始生成回复，模型: {self.model}, 消息数: {len(messages)}")
         try:
-            logger.info(f"API调用参数: model={self.model}, max_tokens={self.max_tokens}, temperature={self.temperature}")
+            # logger.info(f"API调用参数: model={self.model}, max_tokens={self.max_tokens}, temperature={self.temperature}")
             logger.debug(f"消息内容: {messages}")
             
             start_time = time.time()
@@ -107,7 +107,7 @@ class OpenAIClient:
             elapsed_time = time.time() - start_time
             
             content = response.choices[0].message.content
-            logger.info(f"生成回复成功，耗时: {elapsed_time:.2f}秒，回复长度: {len(content)}，回复内容: {content[:100]}")
+            logger.info(f"生成回复成功，耗时: {elapsed_time:.2f}秒，回复长度: {len(content)}，回复内容: {content}")
             logger.debug(f"回复内容: {content}")
             
             return content
