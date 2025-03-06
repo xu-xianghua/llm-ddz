@@ -89,7 +89,7 @@ class OpenAIClient:
         Raises:
             Exception: API 调用失败时抛出异常
         """
-        logger.info(f"开始生成回复，模型: {self.model}, 消息数: {len(messages)}")
+        # logger.info(f"开始生成回复，模型: {self.model}, 消息数: {len(messages)}")
         try:
             # logger.info(f"API调用参数: model={self.model}, max_tokens={self.max_tokens}, temperature={self.temperature}")
             logger.debug(f"消息内容: {messages}")
