@@ -83,7 +83,7 @@ def main():
         
         # 设置PYTHONPATH环境变量，确保能够导入agent模块
         os.environ['PYTHONPATH'] = f"{root_dir}:{os.environ.get('PYTHONPATH', '')}"
-        logging.info(f"设置PYTHONPATH: {os.environ['PYTHONPATH']}")
+        # logging.info(f"设置PYTHONPATH: {os.environ['PYTHONPATH']}")
         
         # 使用subprocess运行服务器脚本
         subprocess.run([sys.executable, 'app.py'], check=True)
