@@ -88,11 +88,6 @@ export class Boot {
         this.scale.leaveIncorrectOrientation.add(this.leaveIncorrectOrientation, this);
         this.onSizeChange();
         
-        // 初始化音乐设置
-        if (localStorage.getItem('musicEnabled') === null) {
-            localStorage.setItem('musicEnabled', 'true');
-        }
-        
         this.state.start('Preloader');
     }
 
@@ -129,13 +124,6 @@ export class Preloader {
         this.preloadBar = this.game.add.sprite(120, 200, 'preloaderBar');
         this.load.setPreloadSprite(this.preloadBar);
 
-        this.load.audio('music_room', 'static/audio/bg_room.mp3');
-        this.load.audio('music_game', 'static/audio/bg_game.ogg');
-        this.load.audio('music_deal', 'static/audio/deal.mp3');
-        this.load.audio('music_win', 'static/audio/end_win.mp3');
-        this.load.audio('music_lose', 'static/audio/end_lose.mp3');
-        this.load.audio('f_score_0', 'static/audio/f_score_0.mp3');
-        this.load.audio('f_score_1', 'static/audio/f_score_1.mp3');
         this.load.atlas('btn', 'static/i/btn.png', 'static/i/btn.json');
         this.load.image('bg', 'static/i/bg.png');
         this.load.spritesheet('poker', 'static/i/poker.png', 90, 120);
@@ -144,10 +132,6 @@ export class Preloader {
 
     create() {
         const that = this;
-        
-        // 根据音乐设置控制背景音乐
-        const musicEnabled = localStorage.getItem('musicEnabled') === 'true';
-        this.game.sound.mute = !musicEnabled;
         
         if (window.USE_LOCAL_SIMULATION) {
             // 本地初始化玩家信息
@@ -168,11 +152,6 @@ export class Preloader {
                 }
             });
         }
-        
-        const music = this.game.add.audio('music_room');
-        music.loop = true;
-        music.loopFull();
-        music.play();
     }
 }
 
@@ -195,74 +174,12 @@ export class MainMenu {
         text.addColor('#cc00cc', 4);
         text.anchor.set(1, 0);
         
-        // 添加音乐开关按钮
-        // 从localStorage读取音乐设置，默认为开启
-        if (localStorage.getItem('musicEnabled') === null) {
-            localStorage.setItem('musicEnabled', 'true');
-        }
-        const musicEnabled = localStorage.getItem('musicEnabled') === 'true';
-        
-        // 创建音乐按钮样式和背景
-        let musicBtnBg = this.game.add.graphics(0, 0);
-        musicBtnBg.beginFill(0x4CAF50, 1);
-        musicBtnBg.drawRoundedRect(0, 0, 200, 50, 10);
-        musicBtnBg.endFill();
-        
-        let musicBtnStyle = {font: "24px Arial", fill: "#ffffff", align: "center"};
-        let musicBtnText = musicEnabled ? "音乐: 开启" : "音乐: 关闭";
-        
-        // 创建音乐按钮
-        let musicBtn = this.game.add.text(0, 0, musicBtnText, musicBtnStyle);
-        musicBtn.anchor.set(0.5);
-        
-        // 创建一个组合按钮
-        let musicBtnGroup = this.game.add.group();
-        musicBtnGroup.add(musicBtnBg);
-        musicBtnGroup.add(musicBtn);
-        
-        // 设置按钮位置
-        musicBtnGroup.x = this.game.world.width / 2;
-        musicBtnGroup.y = this.game.world.height * 0.5;
-        musicBtn.x = musicBtnBg.width / 2;
-        musicBtn.y = musicBtnBg.height / 2;
-        
-        // 使按钮可点击
-        musicBtnBg.inputEnabled = true;
-        musicBtnBg.events.onInputDown.add(() => {
-            // 切换音乐状态
-            const newMusicEnabled = !(localStorage.getItem('musicEnabled') === 'true');
-            localStorage.setItem('musicEnabled', newMusicEnabled);
-            
-            // 更新按钮文本
-            musicBtn.text = newMusicEnabled ? "音乐: 开启" : "音乐: 关闭";
-            
-            // 控制背景音乐
-            if (newMusicEnabled) {
-                if (this.game.sound.mute) {
-                    this.game.sound.mute = false;
-                }
-            } else {
-                if (!this.game.sound.mute) {
-                    this.game.sound.mute = true;
-                }
-            }
-        }, this);
-
         let infoStyle = {font: "24px Arial", fill: "#fff", align: "center"};
         let infoText = this.game.add.text(this.game.world.width / 2, this.game.world.height - 40, "单机版：仅支持人机对战", infoStyle);
         infoText.anchor.set(0.5);
-
-        // 根据设置控制背景音乐
-        this.game.sound.mute = !musicEnabled;
-
-        // this.state.start('Game', true, false, 1);
     }
 
     gotoAiRoom() {
-        // 停止背景音乐
-        this.game.sound.stopAll();
-        
-        // start(key, clearWorld, clearCache, parameter)
         this.state.start('Game', true, false, 1);
     }
 

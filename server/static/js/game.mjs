@@ -126,14 +126,12 @@ export class Game {
         // 创建抢地主按钮
         const group = this.game.add.group();
         let pass = this.game.make.button(width * 0.4, height * 0.6, "btn", function () {
-            this.game.add.audio('f_score_0').play();
             this.send_message([Protocol.REQ_CALL_SCORE, {"rob": 0}]);
         }, this, 'score_0.png', 'score_0.png', 'score_0.png');
         pass.anchor.set(0.5, 0);
         group.add(pass);
 
         const rob = this.game.make.button(width * 0.6, height * 0.6, "btn", function () {
-            this.game.add.audio('f_score_1').play();
             this.send_message([Protocol.REQ_CALL_SCORE, {"rob": 1}]);
         }, this, 'score_1.png', 'score_1.png', 'score_1.png');
         rob.anchor.set(0.5, 0);
