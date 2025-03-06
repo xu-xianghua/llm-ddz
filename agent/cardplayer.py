@@ -136,6 +136,9 @@ class LLMCardPlayer:
 
 你的回答应该简洁明了，直接给出决策结果。
 """
+
+    def reset(self):
+        self.agent.clear_history()
     
     def decide_call_landlord(self, hand_cards: List[int], history_calls: List[Tuple[int, int]]) -> int:
         """决定是否叫地主
