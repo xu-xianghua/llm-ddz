@@ -193,7 +193,7 @@ class Room(object):
             if spec is None:
                 return 'Poker does not comply with the rules'
 
-            if seat != self.last_shot_seat and rule.compare_pokers(pokers, self.last_shot_poker) < 0:
+            if seat != self.last_shot_seat and rule.compare_pokers(pokers, self.last_shot_poker) <= 0:
                 return 'Poker small than last shot'
 
             if spec == 'bomb' or spec == 'rocket':
