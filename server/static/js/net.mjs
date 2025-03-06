@@ -121,11 +121,6 @@ export const Protocol = {
      */
     RSP_SHOT_POKER: 3002,
 
-    /**
-     * 轮到玩家出牌
-     * [RSP_TURN_PLAYER, {"uid": 用户ID 当前回合用户, "timer": int 出牌时间, "pokers": [int 上一手牌]}]
-     */
-    RSP_TURN_PLAYER: 3003,
 
     /**
      *  游戏结束广播, 服务器主动下发
@@ -181,9 +176,7 @@ export class Socket {
         };
 
         this.websocket.onmessage = function (evt) {
-            console.log("收到原始消息:", evt.data);
             const packet = JSON.parse(evt.data);
-            console.log("解析后的消息:", packet);
             pretty_log("RSP", packet);
             onmessage(packet);
         };

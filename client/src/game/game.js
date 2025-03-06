@@ -271,31 +271,88 @@ class GameScene extends Phaser.Scene {
     }
 
     cleanWorld() {
-        for (let i = 0; i < 3; i++) {
-            this.players[i].cleanPokers();
-            this.players[i].uiLeftPoker.kill();
-            this.players[i].uiHead.frameName = 'icon_farmer.png';
+        console.log("清理游戏世界");
+        
+        // 清理玩家手牌
+        if (this.players && this.players.length > 0) {
+            for (let i = 0; i < this.players.length; i++) {
+                if (this.players[i]) {
+                    // 清理玩家手牌
+                    if (this.players[i].pokerInHand && this.players[i].pokerInHand.length > 0) {
+                        for (let j = 0; j < this.players[i].pokerInHand.length; j++) {
+                            let pid = this.players[i].pokerInHand[j];
+                            let p = this.players[i]._pokerPic[pid];
+                            if (p && p.destroy) {
+                                p.destroy();
+                            }
+                        }
+                        this.players[i].pokerInHand = [];
+                        this.players[i]._pokerPic = {};
+                    }
+                    
+                    // 重置玩家UI
+                    if (this.players[i].uiLeftPoker) {
+                        this.players[i].uiLeftPoker.visible = false;
+                    }
+                    
+                    if (this.players[i].uiHead) {
+                        this.players[i].uiHead.setFrame('icon_farmer.png');
+                    }
+                    
+                    // 重置地主状态
+                    this.players[i].isLandlord = false;
+                }
+            }
         }
-
-        for (let i = 0; i < this.tablePoker.length; i++) {
-            let p = this.tablePokerPic[this.tablePoker[i]];
-            p.destroy();
+        
+        // 清理桌面上的牌
+        if (this.tablePokerPic) {
+            for (let key in this.tablePokerPic) {
+                if (this.tablePokerPic.hasOwnProperty(key)) {
+                    let p = this.tablePokerPic[key];
+                    if (p && p.destroy) {
+                        p.destroy();
+                    }
+                }
+            }
+            this.tablePokerPic = {};
         }
+        
+        // 清空桌面牌数组
+        this.tablePoker = [];
+        
+        console.log("游戏世界清理完成");
     }
 
     restart() {
-        this.players = [];
+        console.log("Restarting game...");
+        
+        // Reset game state variables
+        this.tablePoker = [];
         this.tablePokerPic = {};
         this.lastShotPlayer = null;
         this.whoseTurn = 0;
-        // this.player_id = [1, 11, 12];
-        // for (let i = 0; i < 3; i++) {
-            //this.players[i].uiHead.kill();
-            // this.players[i].updateInfo(player_id[i], ' ');
-        // }
-
-        // this.send_message([Protocol.CLI_DEAL_POKEER, -1]);
-       // Socket.send([Protocol.CLI_JOIN_TABLE, this.tableId]);
+        
+        // Reinitialize players if needed
+        if (!this.players || this.players.length === 0) {
+            this.players = [new Player(0), new Player(1), new Player(2)];
+        } else {
+            // Reset player states
+            for (let i = 0; i < this.players.length; i++) {
+                if (this.players[i]) {
+                    this.players[i].pokerInHand = [];
+                    this.players[i]._pokerPic = {};
+                    this.players[i].isLandlord = false;
+                    this.players[i].hintPoker = [];
+                    this.players[i].isDraging = false;
+                }
+            }
+        }
+        
+        // Request new cards from the server
+        Socket.send([Protocol.CLI_DEAL_POKEER, -1]);
+        
+        console.log("Game restart completed");
     }
 
     uidToSeat(uid) {

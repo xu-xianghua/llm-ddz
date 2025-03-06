@@ -44,7 +44,7 @@ class Room(object):
         self.timer = Timer(self.on_timeout)
         self.whose_turn = 0
         self.landlord_seat = 0
-        self.bomb_multiple = 2  # 炸弹倍数固定为2
+        self.bomb_multiple = 2  
 
         self.last_shot_seat = 0
         self.last_shot_poker: List[int] = []

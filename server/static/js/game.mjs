@@ -14,11 +14,6 @@ class Observer {
     }
 
     set(key, val) {
-        // 忽略countdown相关的更新，彻底禁用倒计时
-        if (key === 'countdown') {
-            return;
-        }
-        
         const keys = key.split('.');
         if (keys.length === 1) {
             this.state[key] = val;
@@ -36,11 +31,6 @@ class Observer {
     }
 
     subscribe(key, cb) {
-        // 对于countdown订阅，提供一个空函数，不执行任何操作
-        if (key === 'countdown') {
-            return;
-        }
-        
         const subscribers = this.subscribers;
         if (subscribers.hasOwnProperty(key)) {
             subscribers[key].push(cb);
@@ -82,16 +72,6 @@ export class Game {
         Rule.RuleList = this.cache.getJSON('rule');
         this.stage.backgroundColor = '#182d3b';
 
-        // 初始化背景音乐
-        this.backgroundMusic = this.game.add.audio('music_game');
-        this.backgroundMusic.loop = true;
-        
-        // 根据设置决定是否播放音乐
-        const musicEnabled = localStorage.getItem('musicEnabled') === 'true';
-        if (musicEnabled && !this.game.sound.mute) {
-            this.backgroundMusic.play();
-        }
-
         this.players.push(createPlay(0, this));
         this.players.push(createPlay(1, this));
         this.players.push(createPlay(2, this));
@@ -115,9 +95,26 @@ export class Game {
 
         // 创建准备按钮
         const that = this;
-        
+        const countdown = this.game.add.text(width / 2, height / 2, '10', {
+            font: "80px",
+            fill: "#fff",
+            align: "center"
+        });
+        countdown.anchor.set(0.5);
+        countdown.visible = false;
+        observer.subscribe('countdown', function (timer) {
+            countdown.visible = timer >= 0;
+            if (timer >= 0) {
+                countdown.text = timer;
+                that.game.time.events.add(1000, function () {
+                    observer.set('countdown', observer.get('countdown') - 1);
+                }, that);
+            }
+        });
+
         const ready = this.game.make.button(width / 2, height * 0.6, "btn", function () {
             this.send_message([Protocol.REQ_READY, {"ready": 1}]);
+            observer.set('countdown', 10);
         }, this, 'ready.png', 'ready.png', 'ready.png');
         ready.anchor.set(0.5, 0);
         this.game.world.add(ready);
@@ -145,6 +142,7 @@ export class Game {
 
         observer.subscribe('rob', function (is_rob) {
             group.visible = is_rob;
+            observer.set('countdown', -1);
         });
     }
 
@@ -165,7 +163,6 @@ export class Game {
 
     onmessage(message) {
         const code = message[0], packet = message[1];
-        console.log("收到消息:", code, packet);
         switch (code) {
             case Protocol.RSP_ROOM_LIST:
                 console.log(code, packet);
@@ -182,18 +179,6 @@ export class Game {
                         break;
                     }
                 }
-                
-                // 处理房间同步中的底牌信息
-                if (packet['room'] && packet['room']['bottom_cards'] && packet['room']['bottom_cards'].length === 3) {
-                    console.log("从房间同步数据中获取底牌:", packet['room']['bottom_cards']);
-                    this.tablePoker = packet['room']['bottom_cards'];
-                    
-                    // 如果已经确定了地主，显示底牌
-                    if (packet['room']['landlord_uid'] !== -1 && packet['room']['state'] >= 3) {
-                        console.log("房间已有地主，显示底牌");
-                        this.showLastThreePoker();
-                    }
-                }
                 break;
             case Protocol.RSP_READY:
                 // TODO: 显示玩家已准备状态
@@ -204,13 +189,9 @@ export class Game {
             case Protocol.RSP_DEAL_POKER: {
                 const playerId = packet['uid'];
                 const pokers = packet['pokers'];
-                console.log("收到发牌消息:", playerId, this.players[0].uid, pokers);
-                if (playerId === this.players[0].uid) {
-                    console.log("处理自己的牌");
-                    this.dealPoker(pokers);
-                    this.whoseTurn = this.uidToSeat(playerId);
-                    this.startCallScore();
-                }
+                this.dealPoker(pokers);
+                this.whoseTurn = this.uidToSeat(playerId);
+                this.startCallScore();
                 break;
             }
             case Protocol.RSP_CALL_SCORE: {
@@ -221,35 +202,18 @@ export class Game {
 
                 const hanzi = ['不抢', "抢地主"];
                 this.players[this.whoseTurn].say(hanzi[rob]);
-                
-                console.log("收到抢地主结果:", packet);
-                console.log("当前玩家:", playerId, "抢地主决定:", rob);
-                console.log("地主:", landlord, "底牌:", packet['pokers']);
 
                 observer.set('rob', false);
                 if (landlord === -1) {
-                    console.log("抢地主未结束，轮到下一个玩家");
                     this.whoseTurn = (this.whoseTurn + 1) % 3;
                     this.startCallScore();
                 } else {
-                    console.log("抢地主结束，地主是:", landlord);
                     this.whoseTurn = this.uidToSeat(landlord);
-                    console.log("地主座位号:", this.whoseTurn);
-                    
-                    // 确保底牌存在
-                    if (packet['pokers'] && packet['pokers'].length === 3) {
-                        console.log("设置底牌:", packet['pokers']);
-                        this.tablePoker[0] = packet['pokers'][0];
-                        this.tablePoker[1] = packet['pokers'][1];
-                        this.tablePoker[2] = packet['pokers'][2];
-                        
-                        // 设置地主标识
-                        this.players[this.whoseTurn].setLandlord();
-                        console.log("显示底牌");
-                        this.showLastThreePoker();
-                    } else {
-                        console.error("底牌不存在或长度不为3:", packet['pokers']);
-                    }
+                    this.tablePoker[0] = packet['pokers'][0];
+                    this.tablePoker[1] = packet['pokers'][1];
+                    this.tablePoker[2] = packet['pokers'][2];
+                    this.players[this.whoseTurn].setLandlord();
+                    this.showLastThreePoker();
                 }
                 observer.set('room.multiple', packet['multiple']);
                 break;
@@ -258,22 +222,6 @@ export class Game {
                 this.handleShotPoker(packet);
                 observer.set('room.multiple', packet['multiple']);
                 break;
-            case Protocol.RSP_TURN_PLAYER: {
-                console.log("收到轮到玩家出牌消息:", packet);
-                const playerId = packet['uid'];
-                this.whoseTurn = this.uidToSeat(playerId);
-                
-                // 设置上一手牌
-                const lastPokers = packet['pokers'] || [];
-                this.tablePoker = lastPokers;
-                
-                // 如果轮到玩家自己出牌
-                if (this.whoseTurn === 0) {
-                    console.log("轮到玩家自己出牌");
-                    this.startPlay();
-                }
-                break;
-            }
             case Protocol.RSP_GAME_OVER: {
                 const winner = packet['winner'];
                 const that = this;
@@ -350,7 +298,6 @@ export class Game {
     }
 
     dealPoker(pokers) {
-        console.log("开始发牌，收到的牌:", pokers);  // 添加日志输出
         // 添加一张底牌
         let p = new Poker(this, 55, 55);
         this.tablePokerPic[55] = p;
@@ -362,79 +309,37 @@ export class Game {
             this.players[0].pokerInHand.push(pokers.pop());
         }
 
-        console.log("玩家0的牌:", this.players[0].pokerInHand);  // 添加日志输出
-        console.log("玩家1的牌:", this.players[1].pokerInHand);  // 添加日志输出
-        console.log("玩家2的牌:", this.players[2].pokerInHand);  // 添加日志输出
-
         this.players[0].dealPoker();
         this.players[1].dealPoker();
         this.players[2].dealPoker();
-        console.log("发牌完成");  // 添加日志输出
     }
 
     showLastThreePoker() {
-        console.log("开始显示底牌");
-        
-        // 检查底牌是否存在
-        if (!this.tablePoker || this.tablePoker.length !== 3) {
-            console.error("底牌不存在或长度不为3:", this.tablePoker);
-            return;
-        }
-        
-        console.log("底牌:", this.tablePoker);
-        
         // 删除底牌
-        if (this.tablePokerPic[55]) {
-            console.log("删除原底牌");
-            this.tablePokerPic[55].destroy();
-            delete this.tablePokerPic[55];
-        } else {
-            console.warn("原底牌不存在");
-        }
+        this.tablePokerPic[55].destroy();
+        delete this.tablePokerPic[55];
 
         for (let i = 0; i < 3; i++) {
             let pokerId = this.tablePoker[i];
-            console.log("创建底牌:", i, pokerId);
             let p = new Poker(this, pokerId, pokerId);
             this.tablePokerPic[pokerId] = p;
             this.game.world.add(p);
             this.game.add.tween(p).to({x: this.game.world.width / 2 + (i - 1) * 60}, 600, Phaser.Easing.Default, true);
         }
-        console.log("底牌显示完成，1.5秒后发给地主");
         this.game.time.events.add(1500, this.dealLastThreePoker, this);
     }
 
     dealLastThreePoker() {
-        console.log("开始将底牌发给地主");
-        
-        // 检查当前回合玩家是否是地主
-        if (this.whoseTurn < 0 || this.whoseTurn >= this.players.length) {
-            console.error("无效的地主座位号:", this.whoseTurn);
-            return;
-        }
-        
         let turnPlayer = this.players[this.whoseTurn];
-        console.log("地主玩家:", turnPlayer.uid, "座位号:", this.whoseTurn);
-        
-        // 检查底牌是否存在
-        if (!this.tablePoker || this.tablePoker.length !== 3) {
-            console.error("底牌不存在或长度不为3:", this.tablePoker);
-            return;
-        }
 
         for (let i = 0; i < 3; i++) {
             let pid = this.tablePoker[i];
-            console.log("将底牌发给地主:", i, pid);
-            let poker = this.tablePokerPic[pid];
+            let poker = this.tablePokerPic[pid]
             turnPlayer.pokerInHand.push(pid);
             turnPlayer.pushAPoker(poker);
         }
-        
-        console.log("地主手牌:", turnPlayer.pokerInHand);
         turnPlayer.sortPoker();
-        
         if (this.whoseTurn === 0) {
-            console.log("地主是玩家自己，重新排列手牌");
             turnPlayer.arrangePoker();
             const that = this;
             for (let i = 0; i < 3; i++) {
@@ -449,7 +354,6 @@ export class Game {
                 tween.onComplete.add(adjust, this, p);
             }
         } else {
-            console.log("地主是AI玩家，隐藏底牌");
             let first = turnPlayer.findAPoker(55);
             for (let i = 0; i < 3; i++) {
                 let pid = this.tablePoker[i];
@@ -461,13 +365,8 @@ export class Game {
 
         this.tablePoker = [];
         this.lastShotPlayer = turnPlayer;
-        
-        console.log("底牌发放完成，开始出牌阶段");
         if (this.whoseTurn === 0) {
-            console.log("地主是玩家自己，开始出牌");
             this.startPlay();
-        } else {
-            console.log("地主是AI玩家，等待服务器通知");
         }
     }
 
@@ -522,41 +421,19 @@ export class Game {
     }
 
     startPlay() {
-        console.log("开始出牌阶段");
-        
-        // 检查当前回合玩家
-        if (this.whoseTurn < 0 || this.whoseTurn >= this.players.length) {
-            console.error("无效的当前回合玩家座位号:", this.whoseTurn);
-            return;
-        }
-        
-        console.log("当前回合玩家:", this.players[this.whoseTurn].uid, "座位号:", this.whoseTurn);
-        console.log("上一手牌玩家:", this.lastShotPlayer ? this.lastShotPlayer.uid : "无");
-        
         if (this.isLastShotPlayer()) {
-            console.log("当前玩家是上一手牌玩家，可以任意出牌");
             this.players[0].playPoker([]);
         } else {
-            console.log("当前玩家不是上一手牌玩家，必须跟牌");
-            console.log("上一手牌:", this.tablePoker);
             this.players[0].playPoker(this.tablePoker);
         }
     }
 
     finishPlay(pokers) {
-        console.log("完成出牌，发送出牌请求");
-        console.log("出牌:", pokers);
         this.send_message([Protocol.REQ_SHOT_POKER, {"pokers": pokers}]);
     }
 
     isLastShotPlayer() {
-        console.log("检查当前玩家是否是上一手牌玩家");
-        console.log("当前回合玩家:", this.players[this.whoseTurn].uid, "座位号:", this.whoseTurn);
-        console.log("上一手牌玩家:", this.lastShotPlayer ? this.lastShotPlayer.uid : "无");
-        
-        const result = this.players[this.whoseTurn] === this.lastShotPlayer;
-        console.log("判断结果:", result);
-        return result;
+        return this.players[this.whoseTurn] === this.lastShotPlayer;
     }
 
     quitGame() {

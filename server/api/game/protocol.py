@@ -27,8 +27,6 @@ class Protocol(IntEnum):
 
     REQ_SHOT_POKER = 3001
     RSP_SHOT_POKER = 3002
-    
-    RSP_TURN_PLAYER = 3003
 
     RSP_GAME_OVER = 4002
 
