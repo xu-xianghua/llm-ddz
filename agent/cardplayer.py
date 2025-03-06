@@ -358,6 +358,26 @@ class LLMCardPlayer:
                 logger.warning("决策为王炸，但手牌中没有足够的王")
                 return []
         
+        # 特殊处理"炸弹"
+        bomb_match = re.search(r'炸弹\s*([3-9TJQKA2])|炸\s*([3-9TJQKA2])|([3-9TJQKA2])\s*炸|([3-9TJQKA2])\s*炸弹', anser_content, re.IGNORECASE)
+        if bomb_match:
+            # 找出匹配的牌面
+            face = None
+            for group in bomb_match.groups():
+                if group:
+                    face = group
+                    break
+            
+            if face:
+                logger.info(f"解析结果: 炸弹 {face}")
+                # 检查手牌中是否有4张相同的牌
+                face_cards = [card for card in hand_cards if self._card_to_str(card) == face]
+                if len(face_cards) >= 4:
+                    return face_cards[:4]
+                else:
+                    logger.warning(f"决策为炸弹 {face}，但手牌中没有足够的牌")
+                    return []
+        
         # 将手牌按牌面值分组，以便后续转换为真实的牌
         hand_cards_by_face = {}
         for card in hand_cards:
@@ -369,8 +389,6 @@ class LLMCardPlayer:
         # 提取牌面表示
         # 处理常见的牌型表达方式
         card_patterns = [
-            r'([3-9TJQKA2])\1+',  # 匹配连续重复的牌，如"JJJ"
-            r'([3-9TJQKA2])对',   # 匹配"X对"格式
             r'对([3-9TJQKA2])',   # 匹配"对X"格式
             r'一对([3-9TJQKA2])', # 匹配"一对X"格式
             r'两个([3-9TJQKA2])', # 匹配"两个X"格式
@@ -378,6 +396,8 @@ class LLMCardPlayer:
             r'三张([3-9TJQKA2])', # 匹配"三张X"格式
             r'四个([3-9TJQKA2])', # 匹配"四个X"格式
             r'四张([3-9TJQKA2])', # 匹配"四张X"格式
+            r'([3-9TJQKA2])对',   # 匹配"X对"格式
+            r'([3-9TJQKA2])\1+',  # 匹配连续重复的牌，如"JJJ"
             r'[3-9TJQKA2]',       # 匹配单个牌面
             r'10|十',             # 特别处理10
             r'[wW]'               # 匹配大小王
@@ -385,17 +405,49 @@ class LLMCardPlayer:
         
         # 提取的牌面值和对应的数量
         extracted_faces = {}
+        # 已处理的位置集合，避免重复处理
+        processed_positions = set()
+        
+        # 如果有"炸弹"或"炸"但没有指定牌面，尝试找出手牌中的炸弹
+        if re.search(r'炸弹|炸', anser_content, re.IGNORECASE) and not bomb_match:
+            # 查找手牌中有4张相同的牌
+            for face, cards in hand_cards_by_face.items():
+                if len(cards) >= 4:
+                    logger.info(f"找到炸弹: {face}")
+                    extracted_faces[face] = 4
+                    # 标记为已处理，避免后续重复处理
+                    bomb_positions = []
+                    for m in re.finditer(r'炸弹|炸', anser_content, re.IGNORECASE):
+                        bomb_positions.extend(range(m.start(), m.end()))
+                    processed_positions.update(bomb_positions)
+                    break
         
         # 特别处理10，直接从文本中提取
         ten_matches = re.finditer(r'10|十', anser_content)
         for match in ten_matches:
             if match.group() in ['10', '十']:
+                # 检查位置是否已处理
+                start_pos, end_pos = match.span()
+                if any(pos in processed_positions for pos in range(start_pos, end_pos)):
+                    continue
+                
+                # 标记位置为已处理
+                processed_positions.update(range(start_pos, end_pos))
+                
                 face = '10'
                 extracted_faces[face] = extracted_faces.get(face, 0) + 1
         
         # 特别处理大小王，直接从文本中提取
         joker_matches = re.finditer(r'[wW]|小王|大王', anser_content)
         for match in joker_matches:
+            # 检查位置是否已处理
+            start_pos, end_pos = match.span()
+            if any(pos in processed_positions for pos in range(start_pos, end_pos)):
+                continue
+            
+            # 标记位置为已处理
+            processed_positions.update(range(start_pos, end_pos))
+            
             joker = match.group()
             if joker in ['w', '小王']:
                 face = 'w'
@@ -411,6 +463,14 @@ class LLMCardPlayer:
                 
             matches = re.finditer(pattern, anser_content)
             for match in matches:
+                # 检查位置是否已处理
+                start_pos, end_pos = match.span()
+                if any(pos in processed_positions for pos in range(start_pos, end_pos)):
+                    continue
+                
+                # 标记位置为已处理
+                processed_positions.update(range(start_pos, end_pos))
+                
                 if len(match.groups()) > 0:
                     # 处理带有分组的模式
                     face = match.group(1)
@@ -441,7 +501,7 @@ class LLMCardPlayer:
                 # 累加提取的牌面数量
                 extracted_faces[face] = extracted_faces.get(face, 0) + count
         
-        # logger.info(f"提取的牌面及数量: {extracted_faces}")
+        logger.info(f"提取的牌面及数量: {extracted_faces}")
         
         # 检查是否有足够的牌并转换为真实的牌
         result = []
