@@ -422,6 +422,21 @@ class LLMCardPlayer:
                     processed_positions.update(bomb_positions)
                     break
         
+        # 特别处理J，避免被解析为10
+        j_matches = re.finditer(r'J|j|杰|勾', anser_content)
+        for match in j_matches:
+            # 检查位置是否已处理
+            start_pos, end_pos = match.span()
+            if any(pos in processed_positions for pos in range(start_pos, end_pos)):
+                continue
+            
+            # 标记位置为已处理
+            processed_positions.update(range(start_pos, end_pos))
+            
+            face = 'J'
+            extracted_faces[face] = extracted_faces.get(face, 0) + 1
+            logger.info(f"提取到J: {match.group()}")
+        
         # 特别处理10，直接从文本中提取
         ten_matches = re.finditer(r'10|十', anser_content)
         for match in ten_matches:
