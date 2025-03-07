@@ -223,11 +223,32 @@ export class Game {
             case Protocol.RSP_GAME_OVER: {
                 const winner = packet['winner'];
                 const that = this;
+                
+                // 清理当前桌面上的牌
+                for (let i = 0; i < this.tablePoker.length; i++) {
+                    let p = this.tablePokerPic[this.tablePoker[i]];
+                    if (p) {
+                        p.destroy();
+                    }
+                }
+                this.tablePoker = [];
+                this.tablePokerPic = {};
+                
+                // 只显示网络玩家的剩余牌
                 packet['players'].forEach(function (player) {
                     const seat = that.uidToSeat(player['uid']);
-                    if (seat > 0) {
-                        that.players[seat].replacePoker(player['pokers'], 0);
-                        that.players[seat].reDealPoker();
+                    if (seat > 0) { // 只处理网络玩家
+                        // 清理玩家当前的牌
+                        that.players[seat].cleanPokers();
+                        
+                        // 重新设置玩家的牌
+                        const pokers = player['pokers'];
+                        for (let i = 0; i < pokers.length; i++) {
+                            that.players[seat].pokerInHand.push(pokers[i]);
+                        }
+                        
+                        // 重新发牌
+                        that.players[seat].dealPoker();
                     }
                 });
 
@@ -236,7 +257,7 @@ export class Game {
                 function gameOver() {
                     alert(that.players[that.whoseTurn].isLandlord ? "地主赢" : "农民赢");
                     observer.set('ready', false);
-                    this.cleanWorld();
+                    that.cleanWorld();
                 }
 
                 this.game.time.events.add(2000, gameOver, this);
