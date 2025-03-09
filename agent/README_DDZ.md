@@ -12,7 +12,8 @@
   - 判断出牌是否合规
   - 判断胜负
 - 支持多种LLM模型，包括本地Ollama模型和OpenAI API
-- 可以混合使用LLM玩家和简单AI玩家
+- 可以混合使用LLM玩家和简单AI玩家（IdiotPlayer）
+  - IdiotPlayer使用了服务器端的高级出牌算法，能够进行合理的出牌决策
 
 ## 安装依赖
 
@@ -26,15 +27,18 @@ pip install -r requirements.txt
 
 ### 运行游戏
 
-使用默认设置运行游戏：
+使用提供的shell脚本运行游戏（推荐）：
 
 ```bash
-./run_ddz.py
+./run_ddz_with_path.sh
 ```
 
-或者：
+这个脚本会自动设置PYTHONPATH环境变量，确保所有模块都能被正确导入。
+
+或者，你也可以手动设置PYTHONPATH后运行：
 
 ```bash
+export PYTHONPATH="$PYTHONPATH:$(pwd)"
 python run_ddz.py
 ```
 
@@ -43,7 +47,7 @@ python run_ddz.py
 可以通过命令行参数自定义游戏设置：
 
 ```bash
-python run_ddz.py --p1-model gpt-4 --p2-model qwen2.5:32b --p3-idiot
+./run_ddz_with_path.sh --p1-model gpt-4 --p2-model qwen2.5:32b --p3-idiot
 ```
 
 参数说明：
@@ -85,20 +89,30 @@ ollama pull qwen2.5:32b
 然后运行游戏：
 
 ```bash
-python run_ddz.py --p1-model qwen2.5:32b --p2-model qwen2.5:32b --p3-model qwen2.5:32b
+./run_ddz_with_path.sh --p1-model qwen2.5:32b --p2-model qwen2.5:32b --p3-model qwen2.5:32b
 ```
 
 ### 使用OpenAI API
 
 ```bash
-python run_ddz.py --p1-api-key your_openai_api_key --p1-base-url https://api.openai.com/v1 --p1-model gpt-4
+./run_ddz_with_path.sh --p1-api-key your_openai_api_key --p1-base-url https://api.openai.com/v1 --p1-model gpt-4
 ```
 
 ### 混合使用LLM和简单AI
 
 ```bash
-python run_ddz.py --p1-model gpt-4 --p2-model qwen2.5:32b --p3-idiot
+./run_ddz_with_path.sh --p1-model gpt-4 --p2-model qwen2.5:32b --p3-idiot
 ```
+
+### 使用全部简单AI玩家（用于测试）
+
+如果你想快速测试游戏流程而不使用LLM，可以使用：
+
+```bash
+./run_ddz_with_path.sh --p1-idiot --p2-idiot --p3-idiot
+```
+
+这种方式使用的是内置的IdiotPlayer，它使用了服务器端的高级出牌算法，能够进行合理的出牌决策，适合快速测试游戏流程。
 
 ## 游戏规则
 
@@ -120,17 +134,19 @@ python run_ddz.py --p1-model gpt-4 --p2-model qwen2.5:32b --p3-idiot
 - `agent/llmplayer.py`: 基于LLM的玩家实现
 - `agent/openaiclient.py`: OpenAI客户端封装
 - `run_ddz.py`: 运行游戏的入口脚本
+- `run_ddz_with_path.sh`: 设置PYTHONPATH并运行游戏的shell脚本
 
 ## 自定义系统提示词
 
 可以通过命令行参数自定义每个玩家的系统提示词，以影响LLM的决策行为：
 
 ```bash
-python run_ddz.py --p1-system-prompt "你是一个激进的斗地主玩家，喜欢冒险出牌。" --p2-system-prompt "你是一个保守的斗地主玩家，喜欢稳妥出牌。" --p3-system-prompt "你是一个平衡的斗地主玩家，根据局势灵活调整策略。"
+./run_ddz_with_path.sh --p1-system-prompt "你是一个激进的斗地主玩家，喜欢冒险出牌。" --p2-system-prompt "你是一个保守的斗地主玩家，喜欢稳妥出牌。" --p3-system-prompt "你是一个平衡的斗地主玩家，根据局势灵活调整策略。"
 ```
 
 ## 注意事项
 
 - 程序需要连接到LLM服务（如Ollama或OpenAI API）才能运行
 - 使用大型模型可能会消耗较多资源，请确保您的设备有足够的计算能力
-- 游戏过程中的决策质量取决于所使用的LLM模型的能力 
+- 游戏过程中的决策质量取决于所使用的LLM模型的能力
+- 如果遇到模块导入错误，请确保使用提供的shell脚本运行游戏，或者手动设置PYTHONPATH 
