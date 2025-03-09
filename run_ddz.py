@@ -4,8 +4,14 @@
 import argparse
 import logging
 import sys
+import os
 from typing import List
 
+# 设置工作目录为项目根目录
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
+# Set the PYTHONPATH to include the current directory
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from agent.ddzgame import run_ddz_game
 
 def main():
