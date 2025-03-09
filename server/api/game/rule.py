@@ -2,6 +2,7 @@ import json
 import logging
 from collections import Counter, defaultdict
 from typing import Dict, List, Tuple, Iterable, Optional
+import os
 
 '''
 # A 2 3 4 5 6 7 8 9 0 J Q K w W
@@ -360,7 +361,13 @@ class Rule(object):
         return hand_cards
 
 
-with open('static/rule.json', 'r') as f:
+# with open('static/rule.json', 'r') as f:
+rule_path = os. path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+        "static",
+        "rule.json"
+    )
+with open(rule_path, 'r') as f:
     rule = Rule(json.load(f))
     # from random import sample
     # print(rule._find_best_shot([c for c in 'KKKKwW']))
