@@ -5,12 +5,30 @@ import os
 from typing import List, Dict, Any, Optional, Tuple
 import time
 from collections import Counter, defaultdict
+import colorama
+from colorama import Fore, Style
 
 from .cardplayer import LLMCardPlayer
 from .openaiclient import OpenAIClient
 from .idiotplayer import IdiotPlayer
 
+# 初始化colorama
+colorama.init(autoreset=True)
+
+# 创建日志记录器
 logger = logging.getLogger(__name__)
+
+# 定义牌局信息输出函数
+def print_game_info(message, color=Fore.WHITE, bold=False):
+    """美观地打印牌局信息到控制台
+    
+    Args:
+        message: 要打印的信息
+        color: 文本颜色
+        bold: 是否加粗
+    """
+    style = Style.BRIGHT if bold else ""
+    print(f"{style}{color}{message}{Style.RESET_ALL}")
 
 class DDZGame:
     """斗地主游戏实现
@@ -29,13 +47,14 @@ class DDZGame:
         winner_index: 获胜玩家的索引
     """
     
-    def __init__(self, clients: List[OpenAIClient], system_prompts: List[str] = None, use_idiot_player: List[bool] = None):
+    def __init__(self, clients: List[OpenAIClient], system_prompts: List[str] = None, use_idiot_player: List[bool] = None, player_names: List[str] = None):
         """初始化斗地主游戏
         
         Args:
             clients: 三个OpenAI客户端，用于创建LLM玩家
             system_prompts: 三个玩家的系统提示词，如果为None则使用默认提示词
             use_idiot_player: 是否使用简单AI玩家，如果为True则使用IdiotPlayer，否则使用LLMCardPlayer
+            player_names: 三个玩家的名字，如果为None则使用默认名字
         """
         if system_prompts is None:
             system_prompts = [""] * 3
@@ -43,13 +62,20 @@ class DDZGame:
         if use_idiot_player is None:
             use_idiot_player = [False, False, False]
         
+        if player_names is None:
+            player_names = [f"玩家{i+1}" for i in range(3)]
+        
+        # 保存玩家名字
+        self.player_names = player_names
+        
         # 初始化三个玩家
         self.players = []
         for i in range(3):
             if use_idiot_player[i]:
-                self.players.append(IdiotPlayer(f"玩家{i+1}"))
+                self.players.append(IdiotPlayer(player_names[i]))
             else:
                 self.players.append(LLMCardPlayer(clients[i], system_prompts[i]))
+                self.players[i].name = player_names[i]  # 设置LLM玩家的名字
         
         # 初始化游戏状态
         self.bottom_cards = []
@@ -59,9 +85,15 @@ class DDZGame:
         self.last_player_index = -1
         self.game_over = False
         self.winner_index = -1
+        
+        print_game_info("=" * 60, Fore.CYAN, True)
+        print_game_info("斗地主游戏开始", Fore.CYAN, True)
+        print_game_info("=" * 60, Fore.CYAN, True)
     
     def deal_cards(self):
         """发牌并分配给玩家"""
+        print_game_info("\n【发牌阶段】", Fore.YELLOW, True)
+        
         # 生成一副完整的牌（54张）
         all_cards = list(range(1, 55))
         random.shuffle(all_cards)
@@ -74,18 +106,23 @@ class DDZGame:
         
         # 打印每个玩家的手牌
         for i, player in enumerate(self.players):
-            logger.info(f"玩家{i+1}的手牌: {self._format_cards(player.hand_cards)}")
+            logger.info(f"{self.player_names[i]}的手牌: {self._format_cards(player.hand_cards)}")
+            print_game_info(f"{self.player_names[i]}的手牌: {self._format_cards(player.hand_cards)}", Fore.GREEN)
         
         logger.info(f"底牌: {self._format_cards(self.bottom_cards)}")
+        print_game_info(f"底牌: {self._format_cards(self.bottom_cards)}", Fore.MAGENTA, True)
         
         # 随机选择第一个叫地主的玩家
         self.current_player_index = random.randint(0, 2)
-        logger.info(f"玩家{self.current_player_index+1}先叫地主")
+        logger.info(f"{self.player_names[self.current_player_index]}先叫地主")
+        print_game_info(f"{self.player_names[self.current_player_index]}先叫地主", Fore.BLUE)
         
         return True
     
     def bid_for_landlord(self):
         """进行叫地主流程"""
+        print_game_info("\n【叫地主阶段】", Fore.YELLOW, True)
+        
         history_calls = []
         max_bid = 0
         max_bidder = -1
@@ -97,7 +134,8 @@ class DDZGame:
             # 使用LLM决策叫分
             bid = player.decide_call_landlord(player.hand_cards, history_calls)
             
-            logger.info(f"玩家{self.current_player_index+1}叫分: {bid}")
+            logger.info(f"{self.player_names[self.current_player_index]}叫分: {bid}")
+            print_game_info(f"{self.player_names[self.current_player_index]}叫分: {bid}", Fore.CYAN)
             
             # 记录叫分历史
             history_calls.append((self.current_player_index, bid))
@@ -125,7 +163,9 @@ class DDZGame:
             if hasattr(self.players[self.landlord_index], 'is_landlord'):
                 self.players[self.landlord_index].is_landlord = True
             
-            logger.info(f"玩家{self.landlord_index+1}成为地主，得到底牌后的手牌: {self._format_cards(self.players[self.landlord_index].hand_cards)}")
+            logger.info(f"{self.player_names[self.landlord_index]}成为地主，得到底牌后的手牌: {self._format_cards(self.players[self.landlord_index].hand_cards)}")
+            print_game_info(f"{self.player_names[self.landlord_index]}成为地主", Fore.RED, True)
+            print_game_info(f"地主得到底牌后的手牌: {self._format_cards(self.players[self.landlord_index].hand_cards)}", Fore.GREEN)
             
             # 地主先出牌
             self.current_player_index = self.landlord_index
@@ -133,6 +173,7 @@ class DDZGame:
         else:
             # 如果没人叫地主，重新发牌
             logger.info("没有玩家叫地主，重新发牌")
+            print_game_info("没有玩家叫地主，重新发牌", Fore.RED)
             return False
     
     def play_game(self):
@@ -144,16 +185,26 @@ class DDZGame:
         while not self.bid_for_landlord():
             self.deal_cards()
         
+        print_game_info("\n【出牌阶段】", Fore.YELLOW, True)
+        
         # 游戏主循环
+        round_count = 1
         while not self.game_over:
             # 当前玩家
             player = self.players[self.current_player_index]
             
             # 判断是否需要跟牌
             is_follow = len(self.last_played_cards) > 0 and self.last_player_index != self.current_player_index
-            
+            if not is_follow:
+                print_game_info(f"第{round_count}轮", Fore.BLUE, True)
+                round_count += 1
             # 获取上家出牌信息
             last_player_is_landlord = (self.last_player_index == self.landlord_index)
+            
+            # 显示当前回合信息
+            player_role = "地主" if self.current_player_index == self.landlord_index else "农民"
+            # print_game_info(f"\n回合 {round_count} - {self.player_names[self.current_player_index]}({player_role})出牌", Fore.BLUE, True)
+            # print_game_info(f"手牌: {self._format_cards(player.hand_cards)}", Fore.GREEN)
             
             # 使用LLM决策出牌
             played_cards = player.decide_play_cards(
@@ -168,7 +219,8 @@ class DDZGame:
             
             # 打印出牌信息
             if played_cards:
-                logger.info(f"玩家{self.current_player_index+1}出牌: {self._format_cards(played_cards)}")
+                logger.info(f"{self.player_names[self.current_player_index]}出牌: {self._format_cards(played_cards)}")
+                print_game_info(f"{self.current_player_index+1}-{self.player_names[self.current_player_index]}[{len(player.hand_cards)}]: {self._format_cards(played_cards)}", Fore.YELLOW)
                 
                 # 更新上家出牌信息
                 self.last_played_cards = played_cards
@@ -177,8 +229,12 @@ class DDZGame:
                 # 从手牌中移除出的牌
                 for card in played_cards:
                     player.hand_cards.remove(card)
+                
+                # 显示剩余手牌
+                # print_game_info(f"剩余手牌: {self._format_cards(player.hand_cards)}", Fore.GREEN)
             else:
-                logger.info(f"玩家{self.current_player_index+1}不出")
+                logger.info(f"{self.player_names[self.current_player_index]}不出")
+                print_game_info(f"{self.current_player_index+1}-{self.player_names[self.current_player_index]}[{len(player.hand_cards)}]: 过", Fore.RED)
             
             # 检查是否有玩家出完牌
             if len(player.hand_cards) == 0:
@@ -191,24 +247,29 @@ class DDZGame:
             
             # 如果一轮都不出，由最后出牌的玩家继续出
             if self.current_player_index == self.last_player_index:
-                self.last_played_cards = []
-            
+                self.last_played_cards = []            
             # 添加一些延迟，便于观察游戏进程
-            time.sleep(0.5)
+            time.sleep(0.1)
         
         # 游戏结束，显示结果
         self._show_game_result()
     
     def _show_game_result(self):
         """显示游戏结果"""
+        print_game_info("\n【游戏结果】", Fore.YELLOW, True)
+        
         winner_role = "地主" if self.winner_index == self.landlord_index else "农民"
-        logger.info(f"游戏结束，玩家{self.winner_index+1}({winner_role})获胜！")
+        logger.info(f"游戏结束，{self.player_names[self.winner_index]}({winner_role})获胜！")
+        print_game_info(f"游戏结束，{self.player_names[self.winner_index]}({winner_role})获胜！", Fore.MAGENTA, True)
         
         # 显示剩余玩家的手牌
         for i, player in enumerate(self.players):
             if i != self.winner_index:
                 role = "地主" if i == self.landlord_index else "农民"
-                logger.info(f"玩家{i+1}({role})剩余手牌: {self._format_cards(player.hand_cards)}")
+                logger.info(f"{self.player_names[i]}({role})剩余手牌: {self._format_cards(player.hand_cards)}")
+                print_game_info(f"{self.player_names[i]}({role})剩余手牌: {self._format_cards(player.hand_cards)}", Fore.GREEN)
+        
+        print_game_info("=" * 60, Fore.CYAN, True)
     
     def _format_cards(self, cards: List[int]) -> str:
         """将整数表示的牌转换为可读的字符串
@@ -237,7 +298,9 @@ def run_ddz_game(api_keys: List[str] = None,
                 base_urls: List[str] = None, 
                 models: List[str] = None,
                 system_prompts: List[str] = None,
-                use_idiot_player: List[bool] = None):
+                use_idiot_player: List[bool] = None,
+                log_level: str = "INFO",
+                player_names: List[str] = None):
     """运行斗地主游戏
     
     Args:
@@ -246,12 +309,31 @@ def run_ddz_game(api_keys: List[str] = None,
         models: 三个玩家使用的模型名称，如果为None则使用默认值
         system_prompts: 三个玩家的系统提示词，如果为None则使用默认提示词
         use_idiot_player: 是否使用简单AI玩家，如果为True则使用IdiotPlayer，否则使用LLMCardPlayer
+        log_level: 日志级别，默认为INFO
+        player_names: 三个玩家的名字，如果为None则使用默认名字
     """
     # 配置日志
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, f'ddz_game_{time.strftime("%Y%m%d_%H%M%S")}.log')
+    
+    # 配置日志记录器
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(getattr(logging, log_level))
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    
+    # 将日志处理器添加到根记录器
+    root_logger = logging.getLogger()
+    root_logger.setLevel(getattr(logging, log_level))
+    root_logger.addHandler(file_handler)
+    
+    # 移除控制台处理器，避免日志信息同时输出到控制台
+    for handler in root_logger.handlers[:]:
+        if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
+            root_logger.removeHandler(handler)
+    
+    logger.info(f"日志文件保存在: {log_file}")
+    print_game_info(f"日志文件保存在: {log_file}", Fore.CYAN)
     
     # 设置默认值
     if api_keys is None:
@@ -269,6 +351,9 @@ def run_ddz_game(api_keys: List[str] = None,
     if use_idiot_player is None:
         use_idiot_player = [False, False, False]
     
+    if player_names is None:
+        player_names = [f"玩家{i+1}" for i in range(3)]
+    
     # 创建OpenAI客户端
     clients = [
         OpenAIClient(api_key=api_keys[i], base_url=base_urls[i], model=models[i])
@@ -276,7 +361,7 @@ def run_ddz_game(api_keys: List[str] = None,
     ]
     
     # 创建游戏实例
-    game = DDZGame(clients, system_prompts, use_idiot_player)
+    game = DDZGame(clients, system_prompts, use_idiot_player, player_names)
     
     # 运行游戏
     game.play_game()
