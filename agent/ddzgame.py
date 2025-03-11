@@ -11,6 +11,7 @@ from colorama import Fore, Style
 from .cardplayer import LLMCardPlayer
 from .openaiclient import OpenAIClient
 from .idiotplayer import IdiotPlayer
+from server.api.game.rule import rule as card_rule
 
 # 初始化colorama
 colorama.init(autoreset=True)
@@ -198,6 +199,17 @@ class DDZGame:
             if not is_follow:
                 print_game_info(f"第{round_count}轮", Fore.BLUE, True)
                 round_count += 1
+            else:
+                if not self.can_follow_last_cards(player.hand_cards, self.last_played_cards):
+                    logger.info(f"{self.player_names[self.current_player_index]}肯定要不起")
+                    print_game_info(f"{self.current_player_index+1}-{self.player_names[self.current_player_index]}[{len(player.hand_cards)}]: 要不起", Fore.RED)
+                    # 轮到下一个玩家
+                    self.current_player_index = (self.current_player_index + 1) % 3
+                    # 如果一轮都不出，由最后出牌的玩家继续出
+                    if self.current_player_index == self.last_player_index:
+                        self.last_played_cards = []            
+                    time.sleep(0.1)
+                    continue
             # 获取上家出牌信息
             last_player_is_landlord = (self.last_player_index == self.landlord_index)
             
@@ -206,7 +218,7 @@ class DDZGame:
             # print_game_info(f"\n回合 {round_count} - {self.player_names[self.current_player_index]}({player_role})出牌", Fore.BLUE, True)
             # print_game_info(f"手牌: {self._format_cards(player.hand_cards)}", Fore.GREEN)
             
-            # 使用LLM决策出牌
+            # player 决策出牌
             played_cards = player.decide_play_cards(
                 player.hand_cards,
                 self.last_played_cards,
@@ -217,6 +229,37 @@ class DDZGame:
                 is_follow
             )
             
+            # 检查出牌是否合法
+            if played_cards and not card_rule.is_contains(player.hand_cards, played_cards):
+                logger.warning(f"{self.player_names[self.current_player_index]}出牌不合法: {self._format_cards(played_cards)}")
+                played_cards = []
+            
+            if played_cards and is_follow:
+                # 获取出牌类型
+                decision_cards = card_rule._to_cards(played_cards)
+                last_cards = card_rule._to_cards(self.last_played_cards)
+                
+                # 检查牌型是否相同
+                decision_type, _ = card_rule._get_cards_value(decision_cards)
+                last_type, _ = card_rule._get_cards_value(last_cards)
+                
+                # 比较牌的大小
+                compare_result = card_rule.compare_pokers(played_cards, self.last_played_cards)
+                
+                if (decision_type != last_type and decision_type not in ['bomb', 'rocket']) or compare_result <= 0:
+                    logger.warning(f"{self.player_names[self.current_player_index]}出牌不符合规则: {decision_type} vs {last_type}, 比较结果: {compare_result}")
+                    played_cards = []
+
+            if not is_follow:
+                if not played_cards:
+                    played_cards = card_rule.find_best_shot(player.hand_cards)
+                else:
+                    decision_cards = card_rule._to_cards(played_cards)
+                    decision_type, _ = card_rule._get_cards_value(decision_cards)
+                    if not decision_type:
+                        logger.warning(f"{self.player_names[self.current_player_index]}出牌不是有效的牌型: {decision_type}")
+                        played_cards = card_rule.find_best_shot(player.hand_cards)
+
             # 打印出牌信息
             if played_cards:
                 logger.info(f"{self.player_names[self.current_player_index]}出牌: {self._format_cards(played_cards)}")
@@ -292,6 +335,62 @@ class DDZGame:
             53: '小王', 54: '大王'
         }
         return ' '.join([card_map.get(card, str(card)) for card in cards])
+    
+    def can_follow_last_cards(self, hand_cards: List[int], last_cards: List[int]) -> bool:
+        """判断指定玩家是否能够跟上家的牌
+        
+        Args:
+            hand_cards: 玩家手牌
+            last_cards: 上家出牌
+            
+        Returns:
+            bool: 如果玩家能够跟上家的牌，返回True；否则返回False
+        """
+        # 如果没有上家出牌，或者上家就是当前玩家，则可以任意出牌
+        if len(last_cards) == 0:
+            return True
+
+        # 获取上家出牌的类型和值
+        last_cards_str = card_rule._to_cards(last_cards)
+        last_type, last_value = card_rule._get_cards_value(last_cards_str)
+        
+        logger.debug(f"上家出牌: {last_cards_str}, 类型: {last_type}, 值: {last_value}")
+        
+        if not last_type:
+            # 如果上家出牌不是有效的牌型，则可以任意出牌
+            logger.debug("上家出牌不是有效的牌型，可以任意出牌")
+            return True
+            
+        # 如果上家出的是火箭（双王），无法跟牌
+        if last_type == 'rocket':
+            logger.debug("上家出的是火箭（双王），无法跟牌")
+            return False
+            
+        # 转换手牌为字符串表示
+        hand_cards_str = card_rule._to_cards(hand_cards)
+        logger.debug(f"手牌: {hand_cards_str}")
+                
+        # 检查是否有火箭
+        if 'w' in hand_cards_str and 'W' in hand_cards_str:
+            logger.debug("找到火箭（双王）")
+            return True
+        
+        # 检查是否有同类型的牌能大过上家的牌
+        for i, spec in enumerate(card_rule.rules[last_type]):
+            if i > last_value and card_rule.is_contains(hand_cards_str, spec):
+                logger.debug(f"找到同类型的牌能大过上家的牌: {spec}")
+                return True
+                
+        # # 如果上家出的不是炸弹，任何炸弹都可以压过
+        if last_type != 'bomb':            
+            for spec in card_rule.rules['bomb']:
+                if card_rule.is_contains(hand_cards_str, spec):
+                    logger.debug(f"找到炸弹: {spec}")
+                    return True
+            
+        logger.debug("没有找到能大过上家牌的组合")
+        # 没有找到能大过上家牌的组合
+        return False
 
 
 def run_ddz_game(api_keys: List[str] = None, 
