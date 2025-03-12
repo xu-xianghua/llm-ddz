@@ -165,9 +165,9 @@ export class MainMenu {
         aiRoom.anchor.set(0.5);
         this.game.world.add(aiRoom);
 
-        let setting = this.game.add.button(this.game.world.width / 2, this.game.world.height * 2 / 3, 'btn', this.gotoSetting, this, 'setting.png', 'setting.png', 'setting.png');
-        setting.anchor.set(0.5);
-        this.game.world.add(setting);
+        // let setting = this.game.add.button(this.game.world.width / 2, this.game.world.height * 2 / 3, 'btn', this.gotoSetting, this, 'setting.png', 'setting.png', 'setting.png');
+        // setting.anchor.set(0.5);
+        // this.game.world.add(setting);
 
         let style = {font: "28px Arial", fill: "#fff", align: "right"};
         let text = this.game.add.text(this.game.world.width - 4, 4, "欢迎回来 " + window.playerInfo.name, style);
