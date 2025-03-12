@@ -220,11 +220,12 @@ class LLMCardPlayer:
             # 将手牌和上家出牌转换为可读格式
             readable_hand = self._convert_cards_to_readable(hand_cards)
             readable_last = self._convert_cards_to_readable(last_played_cards) if last_played_cards else "无"
-            logger.info(f"手牌: {readable_hand}, 上家出牌: {readable_last}")
+            counted_hand = self._count_cards(hand_cards)
+            logger.info(f"手牌: {counted_hand}, 上家出牌: {readable_last}")
             # 构建提示信息
             if is_follow:
                 prompt = f"""当前游戏状态：
-- 你的手牌：{readable_hand}
+- 你的手牌：{counted_hand}
 - 上家出牌：{readable_last}
 - 上家位置：{last_player_position}
 - 上家身份：{'地主' if last_player_is_landlord else '农民'}
@@ -243,7 +244,7 @@ class LLMCardPlayer:
 """
             else:
                 prompt = f"""当前游戏状态：
-- 你的手牌：{readable_hand}
+- 你的手牌：{counted_hand}
 - 你的位置：{my_position}
 - 你的身份：{'地主' if is_landlord else '农民'}
 
@@ -428,6 +429,20 @@ class LLMCardPlayer:
                 
         return ' '.join(readable_cards)
 
+    def _count_cards(self, cards: List[int]) -> str:
+        """统计手牌中每种牌的数量，输出为 ‘3: 1张，4: 3张，5: 2张，...’ 的形式
+        
+        Args:
+            cards: 手牌列表
+            
+        Returns:
+            str: 每种牌的数量， ‘3: 1张，4: 3张，5: 2张，...W: 1张’ 
+        """
+        count = {}
+        for card in cards:
+            face = self._card_to_str(card)
+            count[face] = count.get(face, 0) + 1
+        return ', '.join([f"{face}: {count[face]}张" for face in sorted(count.keys())])
 
 # 测试代码
 def test_llm_card_player():
